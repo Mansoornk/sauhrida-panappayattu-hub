@@ -1,0 +1,103 @@
+{
+  "source": "code-archive: sauhrida-contribution-flow-main.zip (TanStack Start app previously built on Lovable Cloud)",
+  "capabilities": [
+    {
+      "capability": "code",
+      "source": "src/ (routes, components, lib, ui kit)",
+      "outcome": "migrate",
+      "status": "verified",
+      "next_action": "none"
+    },
+    {
+      "capability": "schema",
+      "source": "drizzle/migrations 0000-0003 (9 tables, RLS, realtime on live_draws)",
+      "outcome": "migrate",
+      "status": "verified",
+      "next_action": "none"
+    },
+    {
+      "capability": "records",
+      "source": "old Cloud database (no export attached)",
+      "outcome": "migrate",
+      "status": "pending",
+      "next_action": "Waiting on user: CSV exports of members, payatt_months, payatt_events, contributions, priority_requests, live_draws, member_accounts (username only)"
+    },
+    {
+      "capability": "seed data",
+      "source": "36 member slots + Nov 2026 month seeded in migration 0000",
+      "outcome": "migrate",
+      "status": "verified",
+      "next_action": "Replace seeded member rows with exported rows (original IDs) when data arrives"
+    },
+    {
+      "capability": "auth identities",
+      "source": "App-owned sign-in: staff PIN (role_pins) + admin-issued member usernames/passwords (member_accounts, PBKDF2)",
+      "outcome": "preserve app-owned sign-in on Cloud database; members have no email so email verification is not applicable",
+      "status": "pending",
+      "next_action": "Member login + forced password change verified with a temporary account; staff PIN hashes carried over but PIN sign-in not exercised (PINs unknown to agent); imported members need new temporary passwords from Admin"
+    },
+    {
+      "capability": "authorization",
+      "source": "HMAC-signed tokens, requireRole/requireMember on server functions, RLS public reads only for verified+published",
+      "outcome": "migrate",
+      "status": "verified",
+      "next_action": "Public reads hide pending entries and private tables; member gate verified"
+    },
+    {
+      "capability": "secrets",
+      "source": "PAYATT_SESSION_SECRET",
+      "outcome": "regenerate in Cloud",
+      "status": "verified",
+      "next_action": "New PAYATT_SESSION_SECRET generated; old sessions end, users sign in again"
+    },
+    {
+      "capability": "uploaded file bytes",
+      "source": "storage bucket payment-screenshots (private)",
+      "outcome": "migrate bucket; old screenshot files not exportable from archive",
+      "status": "pending",
+      "next_action": "Bucket created and upload verified; old receipt pictures stay on the old app unless exported"
+    },
+    {
+      "capability": "realtime",
+      "source": "live_draws publication for synced lucky wheel",
+      "outcome": "migrate",
+      "status": "verified",
+      "next_action": "live_draws added to realtime publication"
+    },
+    {
+      "capability": "assets",
+      "source": "sauhrida logo asset pointer + public icons/manifest",
+      "outcome": "migrate",
+      "status": "verified",
+      "next_action": "none"
+    },
+    {
+      "capability": "public endpoints/webhooks/schedules",
+      "source": "none found (cron-auth helper is generated, unused)",
+      "outcome": "none",
+      "status": "verified",
+      "next_action": "none"
+    },
+    {
+      "capability": "external providers (payments, email, AI)",
+      "source": "none found; UPI/cash recorded manually",
+      "outcome": "none",
+      "status": "verified",
+      "next_action": "none"
+    },
+    {
+      "capability": "cutover",
+      "source": "old live app sauhrida-contribution-flow.lovable.app",
+      "outcome": "user publishes this project when data is imported",
+      "status": "pending",
+      "next_action": "Publish after data import"
+    },
+    {
+      "capability": "verification",
+      "source": "-",
+      "outcome": "-",
+      "status": "pending",
+      "next_action": "Desk PIN sign-in and live wheel need a real check by the Admin"
+    }
+  ]
+}

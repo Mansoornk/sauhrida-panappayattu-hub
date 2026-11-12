@@ -10,33 +10,128 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ChangePasswordRouteImport } from './routes/change-password'
+import { Route as ContributeRouteImport } from './routes/contribute'
+import { Route as DeskRouteImport } from './routes/desk'
+import { Route as DrawRouteImport } from './routes/draw'
+import { Route as PassbookRouteImport } from './routes/passbook'
+import { Route as StatementRouteImport } from './routes/statement'
+import { Route as TeaRouteImport } from './routes/tea'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ChangePasswordRoute = ChangePasswordRouteImport.update({
+  id: '/change-password',
+  path: '/change-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContributeRoute = ContributeRouteImport.update({
+  id: '/contribute',
+  path: '/contribute',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DeskRoute = DeskRouteImport.update({
+  id: '/desk',
+  path: '/desk',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DrawRoute = DrawRouteImport.update({
+  id: '/draw',
+  path: '/draw',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PassbookRoute = PassbookRouteImport.update({
+  id: '/passbook',
+  path: '/passbook',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StatementRoute = StatementRouteImport.update({
+  id: '/statement',
+  path: '/statement',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TeaRoute = TeaRouteImport.update({
+  id: '/tea',
+  path: '/tea',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/change-password': typeof ChangePasswordRoute
+  '/contribute': typeof ContributeRoute
+  '/desk': typeof DeskRoute
+  '/draw': typeof DrawRoute
+  '/passbook': typeof PassbookRoute
+  '/statement': typeof StatementRoute
+  '/tea': typeof TeaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/change-password': typeof ChangePasswordRoute
+  '/contribute': typeof ContributeRoute
+  '/desk': typeof DeskRoute
+  '/draw': typeof DrawRoute
+  '/passbook': typeof PassbookRoute
+  '/statement': typeof StatementRoute
+  '/tea': typeof TeaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/change-password': typeof ChangePasswordRoute
+  '/contribute': typeof ContributeRoute
+  '/desk': typeof DeskRoute
+  '/draw': typeof DrawRoute
+  '/passbook': typeof PassbookRoute
+  '/statement': typeof StatementRoute
+  '/tea': typeof TeaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/change-password'
+    | '/contribute'
+    | '/desk'
+    | '/draw'
+    | '/passbook'
+    | '/statement'
+    | '/tea'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/change-password'
+    | '/contribute'
+    | '/desk'
+    | '/draw'
+    | '/passbook'
+    | '/statement'
+    | '/tea'
+  id:
+    | '__root__'
+    | '/'
+    | '/change-password'
+    | '/contribute'
+    | '/desk'
+    | '/draw'
+    | '/passbook'
+    | '/statement'
+    | '/tea'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ChangePasswordRoute: typeof ChangePasswordRoute
+  ContributeRoute: typeof ContributeRoute
+  DeskRoute: typeof DeskRoute
+  DrawRoute: typeof DrawRoute
+  PassbookRoute: typeof PassbookRoute
+  StatementRoute: typeof StatementRoute
+  TeaRoute: typeof TeaRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +143,67 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/change-password': {
+      id: '/change-password'
+      path: '/change-password'
+      fullPath: '/change-password'
+      preLoaderRoute: typeof ChangePasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contribute': {
+      id: '/contribute'
+      path: '/contribute'
+      fullPath: '/contribute'
+      preLoaderRoute: typeof ContributeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/desk': {
+      id: '/desk'
+      path: '/desk'
+      fullPath: '/desk'
+      preLoaderRoute: typeof DeskRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/draw': {
+      id: '/draw'
+      path: '/draw'
+      fullPath: '/draw'
+      preLoaderRoute: typeof DrawRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/passbook': {
+      id: '/passbook'
+      path: '/passbook'
+      fullPath: '/passbook'
+      preLoaderRoute: typeof PassbookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/statement': {
+      id: '/statement'
+      path: '/statement'
+      fullPath: '/statement'
+      preLoaderRoute: typeof StatementRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tea': {
+      id: '/tea'
+      path: '/tea'
+      fullPath: '/tea'
+      preLoaderRoute: typeof TeaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ChangePasswordRoute: ChangePasswordRoute,
+  ContributeRoute: ContributeRoute,
+  DeskRoute: DeskRoute,
+  DrawRoute: DrawRoute,
+  PassbookRoute: PassbookRoute,
+  StatementRoute: StatementRoute,
+  TeaRoute: TeaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
