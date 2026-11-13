@@ -304,46 +304,70 @@ export function passwordProblem(pw: string): string | null {
 
 /* ---------------- WhatsApp invitation ---------------- */
 
-/**
- * Invitation text for the month's Payattu. Deliberately never includes the tea menu:
- * the menu is shown on the web page only.
- */
+/** Invitation text for the month's Payattu: both desks, then the joint tea party with both hosts. */
 export function buildWhatsAppInvite(opts: {
   monthLabel: string;
   dateLabel: string | null;
   time: string | null;
   venue: string | null;
-  hosts: { desk: number; name: string; type: SelectionType | string; appeal?: string | null }[];
-  link: string;
+  hosts: {
+    desk: number;
+    name: string;
+    type: SelectionType | string;
+    reason?: PriorityReason | string | null;
+    appeal?: string | null;
+  }[];
+  /** Malayalam names of the chosen tea menu items. */
+  menu?: string[];
+  link?: string | null;
   personalTo?: string | null;
 }): string {
+  const venue = opts.venue || DEFAULT_VENUE;
+  const hostNames = opts.hosts.map((h) => h.name).filter(Boolean);
   const lines: (string | null)[] = [
-    "🌿 *സൗഹൃദ പണപ്പയറ്റ് — Sauhrida Panappayattu* 🌿",
+    "🌿 *സൗഹൃദ പണപ്പയറ്റ്* 🌿",
     "_36 Hearts, Zero Interest, Infinite Brotherhood_",
     "",
     opts.personalTo ? `പ്രിയ ${opts.personalTo},` : null,
     `📅 *${opts.monthLabel} Payattu*${opts.dateLabel ? ` — ${opts.dateLabel}` : ""}`,
-    `🕞 ${opts.time || DEFAULT_TIME}`,
-    `📍 ${opts.venue || DEFAULT_VENUE}`,
-    "",
-    opts.hosts.length ? "🤝 *ആതിഥേയർ / Co-hosts*" : null,
+    `📍 ${venue}`,
     ...opts.hosts.map((h) => {
       const t = SELECTION_LABELS[h.type as SelectionType] ?? SELECTION_LABELS.priority;
-      return `• ${deskLabel(h.desk).ml} (${t.ml}): *${h.name}*`;
+      const reason = h.type === "priority" && h.reason ? REASON_LABELS[h.reason as PriorityReason]?.en : null;
+      return `🤝 ${deskLabel(h.desk).en} (${t.en}${reason ? ` · ${reason}` : ""}): *${h.name}*`;
     }),
     ...opts.hosts
       .filter((h) => h.appeal && h.appeal.trim())
       .flatMap((h) => ["", `💬 _${h.name}:_ ${h.appeal!.trim()}`]),
     "",
-    opts.hosts.length > 1 ? "ഓരോ ഡെസ്കിനും വെവ്വേറെ അടയ്ക്കുക. മിനിമം ₹2,500 / ഡെസ്ക്." : "മിനിമം അടവ് ₹2,500.",
-    "എല്ലാവരെയും ചായസൽക്കാരത്തിലേക്ക് സ്നേഹപൂർവ്വം ക്ഷണിക്കുന്നു 🙏",
-    "",
-    `🔗 ${opts.link}`,
+    "☕ *മലബാർ ചായസൽക്കാരം*",
+    `🗓️ ${[opts.dateLabel, opts.time || DEFAULT_TIME].filter(Boolean).join(", ")}`,
+    `📍 ${venue}`,
+    hostNames.length ? `🏡 ആതിഥേയർ: *${hostNames.join(" & ")}*` : null,
+    opts.menu && opts.menu.length ? `🍽️ വിഭവങ്ങൾ: ${opts.menu.join(", ")}` : null,
+    "📝 മറക്കല്ലേ! എല്ലാവർക്കും സ്നേഹപൂർവ്വം സ്വാഗതം 🙏",
+    opts.link ? "" : null,
+    opts.link ? `🔗 ${opts.link}` : null,
   ];
   return lines
     .filter((l): l is string => l !== null)
     .join("\n")
     .replace(/\n{3,}/g, "\n\n");
+}
+
+/** WhatsApp text the Admin sends a member with their login details. */
+export function buildLoginShareText(opts: { name: string; username: string; tempPassword: string; link: string }): string {
+  return [
+    "🌿 *സൗഹൃദ പണപ്പയറ്റ്* 🌿",
+    "പ്രിയപ്പെട്ട അംഗത്തിനുള്ള ലോഗിൻ വിവരങ്ങൾ:",
+    "",
+    `👤 പേര്: ${opts.name}`,
+    `🔑 Username: ${opts.username}`,
+    `🔒 താത്കാലിക പാസ്‌വേർഡ്: ${opts.tempPassword}`,
+    "",
+    "ലിങ്കിൽ പ്രവേശിച്ച് സ്വന്തം പാസ്‌വേർഡ് സെറ്റ് ചെയ്യുക:",
+    `👉 ${opts.link}`,
+  ].join("\n");
 }
 
 /* ---------------- Formatting ---------------- */

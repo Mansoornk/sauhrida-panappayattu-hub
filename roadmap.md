@@ -34,5 +34,29 @@ Migration into this project (Nov 12):
 
 - [x] App, pages, rules and data structure moved; 36 members and November month seeded
 - [x] Member sign-in, forced password change and contribution with receipt checked end to end
-- [ ] Import existing records — waiting on user: CSV exports from the old app's Cloud database
+- [x] Import existing records (members, months, desks, payments, tea party, member usernames)
 - [ ] Admin/Conductor PIN sign-in check — waiting on user (PINs unchanged from the old app)
+
+Live draw alerts + Conductor Desk (Nov 13):
+
+- [ ] Draw alerts toggle (profile + top bar): phone notification 60 s before draw, tap opens Live Wheel
+- [ ] Background alert sender runs every minute and notifies subscribed members
+- [ ] Foreground popup with bell chime + pulsing "Join Live Draw Now"
+- [ ] Spin 2 unlocks 15 s after Spin 1; winners on home board + WhatsApp invite
+- [ ] Remove Conductor PIN login; members who are this month's Desk 1/2 recipient get a "Conductor Desk" tab
+- [ ] Conductor sees/enters/verifies only their own desk; Admin keeps both
+- [ ] One-click Verify + Add Contribution (min ₹2,500) inside the conductor's desk
+
+Member roster + sign-in gate (Nov 13):
+
+- [ ] Admin Desk: remove a member from a slot (1–36)
+- [ ] Admin Desk: "Add New Member" into a chosen slot with name, department, phone, username, temporary password
+- [ ] Slot order reflected in member lists, passbooks and wheel
+- [ ] Signed-out home is a welcome page about സൗഹൃദ പണപ്പയറ്റ് with a "Sign In (ലോഗിൻ ചെയ്യുക)" button; all pool, desk, tea, draw, directory and passbook info only after sign-in
+
+App name + messages (Nov 13):
+
+- [ ] Installed app name "സൗഹൃദ പണപ്പയറ്റ്" (manifest name/short name/description, iOS title, page title)
+- [ ] Passbook title "എന്റെ പയറ്റ് പുസ്തകം" + description "സൗഹൃദ പണപ്പയറ്റ് - വ്യക്തിഗത കണക്കുവിവരങ്ങൾ"
+- [ ] Login-details WhatsApp message in the new Malayalam format with the passbook link
+- [ ] Invitation WhatsApp message: Malayalam title, no "pay separately"/minimum lines, "☕ മലബാർ ചായസൽക്കാരം", both hosts on one line

@@ -21,6 +21,7 @@ import {
   wheelCandidates,
   wheelDayFor,
   buildWhatsAppInvite,
+  buildLoginShareText,
   deskLabel,
 } from "./payatt-rules";
 
@@ -203,9 +204,10 @@ describe("WhatsApp invitation", () => {
     time: null,
     venue: null,
     hosts: [
-      { desk: 1, name: "Dr. A", type: "priority", appeal: "സഹായം പ്രതീക്ഷിക്കുന്നു" },
+      { desk: 1, name: "Dr. A", type: "priority", reason: "house", appeal: "സഹായം പ്രതീക്ഷിക്കുന്നു" },
       { desk: 2, name: "Dr. B", type: "lottery", appeal: null },
     ],
+    menu: ["സുലൈമാനി", "പഴംപൊരി"],
     link: "https://example.app",
   };
   it("defaults to 3:30 PM at the College Cafeteria", () => {
@@ -213,16 +215,46 @@ describe("WhatsApp invitation", () => {
     expect(text).toContain("3:30 PM");
     expect(text).toContain("College Cafeteria");
   });
-  it("includes both co-hosts, the appeal and the app link", () => {
+  it("uses only the Malayalam title and tea party heading", () => {
     const text = buildWhatsAppInvite(base);
-    expect(text).toContain("Dr. A");
-    expect(text).toContain("Dr. B");
-    expect(text).toContain("സഹായം പ്രതീക്ഷിക്കുന്നു");
-    expect(text).toContain("https://example.app");
+    expect(text.split("\n")[0]).toBe("🌿 *സൗഹൃദ പണപ്പയറ്റ്* 🌿");
+    expect(text).not.toContain("Sauhrida Panappayattu");
+    expect(text).toContain("☕ *മലബാർ ചായസൽക്കാരം*");
+    expect(text).not.toContain("Malabar Chayasalkaram");
   });
-  it("never includes the tea menu", () => {
+  it("drops the pay-separately and minimum-amount lines", () => {
     const text = buildWhatsAppInvite(base);
-    expect(text).not.toMatch(/menu|porotta|sulaimani|പൊറോട്ട|സുലൈമാനി/i);
+    expect(text).not.toContain("വെവ്വേറെ");
+    expect(text).not.toContain("2,500");
+  });
+  it("puts both hosts on one ആതിഥേയർ line", () => {
+    expect(buildWhatsAppInvite(base)).toContain("🏡 ആതിഥേയർ: *Dr. A & Dr. B*");
+    expect(buildWhatsAppInvite({ ...base, hosts: [base.hosts[0]!] })).toContain("🏡 ആതിഥേയർ: *Dr. A*");
+  });
+  it("lists each desk with its selection type and the chosen menu", () => {
+    const text = buildWhatsAppInvite(base);
+    expect(text).toContain("🤝 Payattu Desk 1 (Priority · House): *Dr. A*");
+    expect(text).toContain("🤝 Payattu Desk 2 (Lottery): *Dr. B*");
+    expect(text).toContain("🍽️ വിഭവങ്ങൾ: സുലൈമാനി, പഴംപൊരി");
+  });
+});
+
+describe("Login details message", () => {
+  it("follows the Malayalam template with the passbook link", () => {
+    const text = buildLoginShareText({ name: "Dr. A", username: "dra", tempPassword: "abcde234", link: "https://x.app/passbook" });
+    expect(text).toBe(
+      [
+        "🌿 *സൗഹൃദ പണപ്പയറ്റ്* 🌿",
+        "പ്രിയപ്പെട്ട അംഗത്തിനുള്ള ലോഗിൻ വിവരങ്ങൾ:",
+        "",
+        "👤 പേര്: Dr. A",
+        "🔑 Username: dra",
+        "🔒 താത്കാലിക പാസ്‌വേർഡ്: abcde234",
+        "",
+        "ലിങ്കിൽ പ്രവേശിച്ച് സ്വന്തം പാസ്‌വേർഡ് സെറ്റ് ചെയ്യുക:",
+        "👉 https://x.app/passbook",
+      ].join("\n"),
+    );
   });
 });
 
