@@ -8,6 +8,13 @@
       "when": 1794464838115,
       "tag": "0000_create_panappayattu_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794622973090,
+      "tag": "0001_roster_slots_push_alerts_signed_in_only",
+      "breakpoints": true
     }
   ]
 }

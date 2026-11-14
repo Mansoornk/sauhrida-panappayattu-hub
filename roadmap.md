@@ -64,3 +64,9 @@ App name + messages (Nov 13):
 Recipient cards (Nov 14):
 
 - [x] Pool recipient cards: hide priority reason; subtitle "Department of [Department]"
+
+Cycles + defaults (Nov 14):
+
+- [ ] Unlimited months: "+ Add New Month / Cycle" in Cycles and month picker, Month N counter
+- [ ] Default time "03:45 PM (ക്ലാസ്സ് സമയത്തിന് ശേഷം)"
+- [ ] Default venue "സർ സയ്യിദ് കോളേജ് കഫറ്റീരിയ (Sir Syed College Cafeteria)"

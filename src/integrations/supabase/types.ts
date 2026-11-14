@@ -209,6 +209,7 @@ export type Database = {
           id: string
           name: string
           phone: string | null
+          removed_at: string | null
           slot_no: number
         }
         Insert: {
@@ -219,6 +220,7 @@ export type Database = {
           id?: string
           name: string
           phone?: string | null
+          removed_at?: string | null
           slot_no: number
         }
         Update: {
@@ -229,6 +231,7 @@ export type Database = {
           id?: string
           name?: string
           phone?: string | null
+          removed_at?: string | null
           slot_no?: number
         }
         Relationships: []
@@ -285,6 +288,7 @@ export type Database = {
           conductor2_id: string | null
           conductor2_payout: number
           created_at: string
+          draw_alert_sent_at: string | null
           draw_at: string | null
           event_time: string | null
           id: string
@@ -303,6 +307,7 @@ export type Database = {
           conductor2_id?: string | null
           conductor2_payout?: number
           created_at?: string
+          draw_alert_sent_at?: string | null
           draw_at?: string | null
           event_time?: string | null
           id?: string
@@ -321,6 +326,7 @@ export type Database = {
           conductor2_id?: string | null
           conductor2_payout?: number
           created_at?: string
+          draw_alert_sent_at?: string | null
           draw_at?: string | null
           event_time?: string | null
           id?: string
@@ -392,6 +398,44 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "priority_requests_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string | null
+          created_at: string
+          endpoint: string
+          id: string
+          last_sent_at: string | null
+          member_id: string | null
+          p256dh: string | null
+        }
+        Insert: {
+          auth?: string | null
+          created_at?: string
+          endpoint: string
+          id?: string
+          last_sent_at?: string | null
+          member_id?: string | null
+          p256dh?: string | null
+        }
+        Update: {
+          auth?: string | null
+          created_at?: string
+          endpoint?: string
+          id?: string
+          last_sent_at?: string | null
+          member_id?: string | null
+          p256dh?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "members"

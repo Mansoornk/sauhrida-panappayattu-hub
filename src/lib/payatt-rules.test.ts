@@ -24,6 +24,12 @@ import {
   buildLoginShareText,
   departmentLabel,
   deskLabel,
+  conductorDeskEvents,
+  slotProblem,
+  freeSlots,
+  nextCycleMonth,
+  DEFAULT_TIME,
+  DEFAULT_VENUE,
 } from "./payatt-rules";
 
 describe("contribution amount", () => {
@@ -63,7 +69,6 @@ describe("spinning wheel lock", () => {
   it("never lets Members or Conductors spin, even on the right day", () => {
     const base = { payattDate: "2026-11-28", today: "2026-11-26", override: true };
     expect(canSpinWheel({ ...base, role: "member" })).toBe(false);
-    expect(canSpinWheel({ ...base, role: "conductor" })).toBe(false);
   });
   it("Admin test override unlocks on any day", () => {
     expect(
@@ -211,10 +216,10 @@ describe("WhatsApp invitation", () => {
     menu: ["സുലൈമാനി", "പഴംപൊരി"],
     link: "https://example.app",
   };
-  it("defaults to 3:30 PM at the College Cafeteria", () => {
+  it("defaults to 03:45 PM at the Sir Syed College Cafeteria", () => {
     const text = buildWhatsAppInvite(base);
-    expect(text).toContain("3:30 PM");
-    expect(text).toContain("College Cafeteria");
+    expect(text).toContain("03:45 PM (ക്ലാസ്സ് സമയത്തിന് ശേഷം)");
+    expect(text).toContain("സർ സയ്യിദ് കോളേജ് കഫറ്റീരിയ (Sir Syed College Cafeteria)");
   });
   it("uses only the Malayalam title and tea party heading", () => {
     const text = buildWhatsAppInvite(base);
@@ -300,13 +305,17 @@ describe("Live lucky wheel", () => {
     expect(liveDrawPhase({ now: at + 2000, drawAt, events: [d1, d2], draws }).phase).toBe("spinning");
   });
 
-  it("opens Spin 2 for Desk 2 only after Spin 1 finishes, and never Desk 2 first", () => {
+  it("opens Spin 2 for Desk 2 only 15 seconds after Spin 1 finishes, and never Desk 2 first", () => {
     expect(liveSpinProblem({ now: at, drawAt, events: [d1, d2], draws: [], eventId: "e2" })).toBe(
       "Spin Payattu Desk 1 first",
     );
     const won = { ...d1, recipient_member_id: "m9" };
     const draws = [{ event_id: "e1", started_at: new Date(at).toISOString(), duration_ms: 7000 }];
-    const after = liveDrawPhase({ now: at + 7000, drawAt, events: [won, d2], draws });
+    const justAfter = liveDrawPhase({ now: at + 7000, drawAt, events: [won, d2], draws });
+    expect(justAfter.phase).toBe("intermission");
+    expect(justAfter.gapLeft).toBe(15_000);
+    expect(liveSpinProblem({ now: at + 21_999, drawAt, events: [won, d2], draws, eventId: "e2" })).not.toBeNull();
+    const after = liveDrawPhase({ now: at + 22_000, drawAt, events: [won, d2], draws });
     expect(after.phase).toBe("open");
     expect(after.target?.id).toBe("e2");
   });
@@ -314,5 +323,46 @@ describe("Live lucky wheel", () => {
   it("is done when every lottery desk has a winner", () => {
     const won = { ...d1, recipient_member_id: "m9" };
     expect(liveDrawPhase({ now: at, drawAt, events: [won], draws: [] }).phase).toBe("done");
+  });
+});
+
+describe("Conductor desks", () => {
+  const events = [
+    { id: "a", month: "2026-11-01", recipient_member_id: "m1" },
+    { id: "b", month: "2026-11-01", recipient_member_id: "m2" },
+    { id: "c", month: "2026-10-01", recipient_member_id: "m1" },
+  ];
+  it("shows a conductor only their own desk for this month or later", () => {
+    expect(conductorDeskEvents(events, "m1", "2026-11-14").map((e) => e.id)).toEqual(["a"]);
+    expect(conductorDeskEvents(events, "m2", "2026-11-14").map((e) => e.id)).toEqual(["b"]);
+  });
+  it("gives members who aren't recipients no desk", () => {
+    expect(conductorDeskEvents(events, "m3", "2026-11-14")).toEqual([]);
+    expect(conductorDeskEvents(events, null, "2026-11-14")).toEqual([]);
+  });
+});
+
+describe("36-slot roster", () => {
+  it("only accepts free slots from 1 to 36", () => {
+    expect(slotProblem(0, [])).not.toBeNull();
+    expect(slotProblem(37, [])).not.toBeNull();
+    expect(slotProblem(5, [5])).toContain("already taken");
+    expect(slotProblem(36, [1, 2])).toBeNull();
+  });
+  it("lists the free slots in order", () => {
+    const taken = Array.from({ length: 36 }, (_, i) => i + 1).filter((s) => s !== 7 && s !== 30);
+    expect(freeSlots(taken)).toEqual([7, 30]);
+  });
+});
+
+describe("Cycle months and defaults", () => {
+  it("adds the month after the newest one, with no 3-month limit", () => {
+    expect(nextCycleMonth(["2026-10-01", "2026-12-01", "2026-11-01"])).toBe("2027-01-01");
+    expect(nextCycleMonth(["2027-12-01"])).toBe("2028-01-01");
+    expect(cycleMonthNumber("2027-02-01")).toBe(5);
+  });
+  it("uses 03:45 PM at the Sir Syed College Cafeteria by default", () => {
+    expect(DEFAULT_TIME).toBe("03:45 PM (ക്ലാസ്സ് സമയത്തിന് ശേഷം)");
+    expect(DEFAULT_VENUE).toBe("സർ സയ്യിദ് കോളേജ് കഫറ്റീരിയ (Sir Syed College Cafeteria)");
   });
 });

@@ -7,7 +7,7 @@ export const IST_TIMEZONE = "Asia/Kolkata";
 export const CYCLE_START_MONTH = "2026-10-01";
 export const MIN_PASSWORD_LENGTH = 8;
 
-export type Role = "member" | "conductor" | "admin";
+export type Role = "member" | "admin";
 export type ContributionStatus = "pending" | "verified" | "rejected";
 export type PriorityReason = "health" | "marriage" | "house" | "debt" | "other";
 export type SelectionType = "priority" | "lottery";
@@ -20,8 +20,8 @@ export const REASON_LABELS: Record<PriorityReason, { en: string; ml: string }> =
   other: { en: "Other urgent need", ml: "മറ്റ് അടിയന്തര ആവശ്യം" },
 };
 
-export const DEFAULT_VENUE = "കോളേജ് കഫറ്റീരിയ (College Cafeteria)";
-export const DEFAULT_TIME = "3:30 PM (ക്ലാസ്സ് സമയത്തിന് ശേഷം / After Class Hours)";
+export const DEFAULT_VENUE = "സർ സയ്യിദ് കോളേജ് കഫറ്റീരിയ (Sir Syed College Cafeteria)";
+export const DEFAULT_TIME = "03:45 PM (ക്ലാസ്സ് സമയത്തിന് ശേഷം)";
 
 /** "Payattu Desk 1" / "പയറ്റ് ഡെസ്ക് 1" — each desk is one recipient's separate ledger. */
 export function deskLabel(no: number): { en: string; ml: string } {
@@ -119,6 +119,12 @@ export function maxEventsForMonth(monthKey: string): number {
   const n = cycleMonthNumber(monthKey);
   if (n < 1) return 0;
   return n === 1 ? 1 : 2;
+}
+
+/** The month after the newest one in the list (or after `fallback` when the list is empty). */
+export function nextCycleMonth(months: string[], fallback: string = CYCLE_START_MONTH): string {
+  const newest = months.reduce((a, m) => (m > a ? m : a), "");
+  return newest ? addMonths(newest, 1) : fallback;
 }
 
 /** All months from the start of the scheme up to (and including) `untilMonth`, newest first. */
@@ -228,6 +234,37 @@ export function wheelCandidates<M extends MemberLike>(
   );
   const excluded = new Set(excludeIds.filter(Boolean) as string[]);
   return members.filter((m) => !m.has_conducted && verified.has(m.id) && !excluded.has(m.id));
+}
+
+/* ---------------- Conductor desks ---------------- */
+
+/**
+ * The Payattu Desks a member conducts: desks where they are the recipient,
+ * for the current month or later. Each conductor sees only these ledgers.
+ */
+export function conductorDeskEvents<E extends { month: string; recipient_member_id: string | null }>(
+  events: E[],
+  memberId: string | null | undefined,
+  today: string,
+): E[] {
+  if (!memberId) return [];
+  const current = monthKeyOf(today);
+  return events.filter((e) => e.recipient_member_id === memberId && e.month >= current);
+}
+
+/* ---------------- 36-slot roster ---------------- */
+
+/** Null when a member can be placed in `slot`, otherwise why not. */
+export function slotProblem(slot: number, takenSlots: number[]): string | null {
+  if (!Number.isInteger(slot) || slot < 1 || slot > TOTAL_MEMBERS) return `Choose a slot from 1 to ${TOTAL_MEMBERS}`;
+  if (takenSlots.includes(slot)) return `Slot ${slot} is already taken. Remove that member first.`;
+  return null;
+}
+
+/** Free slots in the 36-member roster, lowest first. */
+export function freeSlots(takenSlots: number[]): number[] {
+  const taken = new Set(takenSlots);
+  return Array.from({ length: TOTAL_MEMBERS }, (_, i) => i + 1).filter((s) => !taken.has(s));
 }
 
 /* ---------------- Ledgers ---------------- */
@@ -416,6 +453,8 @@ export function formatDate(date: string): string {
 export const LIVE_ALERT_MS = 60_000;
 /** How long one synchronized spin animates on every screen. */
 export const LIVE_SPIN_MS = 7_000;
+/** With two lottery desks, Spin 2 unlocks this long after Spin 1 finishes. */
+export const LIVE_SPIN_GAP_MS = 15_000;
 const IST_OFFSET = "+05:30";
 
 /** Admin form values ("2026-12-23", "15:30", India time) → ISO instant. */
@@ -463,11 +502,12 @@ export type LivePhase =
   | "alert" // last minute before the draw
   | "open" // spin button unlocked for the next desk
   | "spinning" // someone spun; everyone watches
+  | "intermission" // Spin 1 finished; Spin 2 unlocks shortly
   | "done"; // every lottery desk has a winner
 
 /**
  * Where the month's live draw stands. Lottery desks are drawn in desk order:
- * Desk 2 opens only after Desk 1's spin has finished animating.
+ * Desk 2 opens 15 seconds after Desk 1's spin has finished animating.
  */
 export function liveDrawPhase<E extends EventLike & { id: string }, D extends LiveDrawLike>(opts: {
   now: number;
@@ -475,22 +515,25 @@ export function liveDrawPhase<E extends EventLike & { id: string }, D extends Li
   override?: boolean;
   events: E[];
   draws: D[];
-}): { phase: LivePhase; target: E | null; msLeft: number; spinning: D | null } {
+}): { phase: LivePhase; target: E | null; msLeft: number; spinning: D | null; gapLeft: number } {
   const { now, drawAt, events, draws } = opts;
   const ids = new Set(events.map((e) => e.id));
   const monthDraws = draws.filter((d) => ids.has(d.event_id));
   const spinning =
     monthDraws.find((d) => now < new Date(d.started_at).getTime() + d.duration_ms) ?? null;
   const msLeft = drawAt ? new Date(drawAt).getTime() - now : Number.POSITIVE_INFINITY;
-  if (spinning) return { phase: "spinning", target: null, msLeft, spinning };
-  if (!events.some((e) => e.selection_type === "lottery"))
-    return { phase: "none", target: null, msLeft, spinning: null };
+  const base = { msLeft, spinning: null, gapLeft: 0 };
+  if (spinning) return { ...base, phase: "spinning", target: null, spinning };
+  if (!events.some((e) => e.selection_type === "lottery")) return { ...base, phase: "none", target: null };
   const pending = eventsNeedingDraw(events).filter((e) => !monthDraws.some((d) => d.event_id === e.id));
   const target = pending[0] ?? null;
-  if (!target) return { phase: "done", target: null, msLeft, spinning: null };
-  if (opts.override || msLeft <= 0) return { phase: "open", target, msLeft, spinning: null };
-  if (!drawAt) return { phase: "unscheduled", target, msLeft, spinning: null };
-  return { phase: msLeft <= LIVE_ALERT_MS ? "alert" : "countdown", target, msLeft, spinning: null };
+  if (!target) return { ...base, phase: "done", target: null };
+  const lastEnd = monthDraws.reduce((a, d) => Math.max(a, new Date(d.started_at).getTime() + d.duration_ms), 0);
+  const gapLeft = lastEnd ? lastEnd + LIVE_SPIN_GAP_MS - now : 0;
+  if (gapLeft > 0) return { ...base, phase: "intermission", target, gapLeft };
+  if (opts.override || msLeft <= 0) return { ...base, phase: "open", target };
+  if (!drawAt) return { ...base, phase: "unscheduled", target };
+  return { ...base, phase: msLeft <= LIVE_ALERT_MS ? "alert" : "countdown", target };
 }
 
 /** Server-side gate for "Spin the Wheel": null when allowed, else the reason. */
@@ -504,6 +547,7 @@ export function liveSpinProblem<E extends EventLike & { id: string }, D extends 
 }): string | null {
   const s = liveDrawPhase(opts);
   if (s.phase === "spinning") return "The wheel is already spinning";
+  if (s.phase === "intermission") return `Spin 2 unlocks in ${Math.ceil(s.gapLeft / 1000)} seconds`;
   if (s.phase === "done" || s.phase === "none") return "Every lottery desk this month already has a winner";
   if (s.phase === "unscheduled") return "The Admin hasn't scheduled the live draw yet";
   if (s.phase !== "open") return "The live draw hasn't started yet";
