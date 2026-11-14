@@ -56,7 +56,11 @@ Member roster + sign-in gate (Nov 13):
 
 App name + messages (Nov 13):
 
-- [ ] Installed app name "സൗഹൃദ പണപ്പയറ്റ്" (manifest name/short name/description, iOS title, page title)
-- [ ] Passbook title "എന്റെ പയറ്റ് പുസ്തകം" + description "സൗഹൃദ പണപ്പയറ്റ് - വ്യക്തിഗത കണക്കുവിവരങ്ങൾ"
-- [ ] Login-details WhatsApp message in the new Malayalam format with the passbook link
-- [ ] Invitation WhatsApp message: Malayalam title, no "pay separately"/minimum lines, "☕ മലബാർ ചായസൽക്കാരം", both hosts on one line
+- [x] Installed app name "സൗഹൃദ പണപ്പയറ്റ്" (manifest name/short name/description, iOS title, page title)
+- [x] Passbook title "എന്റെ പയറ്റ് പുസ്തകം" + description "സൗഹൃദ പണപ്പയറ്റ് - വ്യക്തിഗത കണക്കുവിവരങ്ങൾ"
+- [x] Login-details WhatsApp message in the new Malayalam format with the passbook link
+- [x] Invitation WhatsApp message: Malayalam title, no "pay separately"/minimum lines, "☕ മലബാർ ചായസൽക്കാരം", both hosts on one line
+
+Recipient cards (Nov 14):
+
+- [x] Pool recipient cards: hide priority reason; subtitle "Department of [Department]"

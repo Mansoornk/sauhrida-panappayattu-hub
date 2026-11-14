@@ -20,13 +20,11 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/passbook")({
   head: () => ({
     meta: [
-      { title: "My Payattu · Sauhrida Panappayattu" },
-      {
-        name: "description",
-        content: "Your Panappayattu dashboard: every recipient and their total, and your own contributions to each.",
-      },
-      { property: "og:title", content: "My Payattu — വ്യക്തിഗത പാസ്ബുക്ക്" },
-      { property: "og:description", content: "Personal passbook with contributions separated by recipient." },
+      { title: "എന്റെ പയറ്റ് പുസ്തകം" },
+      { name: "description", content: "സൗഹൃദ പണപ്പയറ്റ് - വ്യക്തിഗത കണക്കുവിവരങ്ങൾ" },
+      { property: "og:title", content: "എന്റെ പയറ്റ് പുസ്തകം" },
+      { property: "og:description", content: "സൗഹൃദ പണപ്പയറ്റ് - വ്യക്തിഗത കണക്കുവിവരങ്ങൾ" },
+      { property: "og:type", content: "website" },
     ],
   }),
   loader: ({ context }) => context.queryClient.ensureQueryData(publicSnapshotQuery),

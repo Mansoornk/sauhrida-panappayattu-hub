@@ -22,6 +22,7 @@ import {
   wheelDayFor,
   buildWhatsAppInvite,
   buildLoginShareText,
+  departmentLabel,
   deskLabel,
 } from "./payatt-rules";
 
@@ -233,9 +234,17 @@ describe("WhatsApp invitation", () => {
   });
   it("lists each desk with its selection type and the chosen menu", () => {
     const text = buildWhatsAppInvite(base);
-    expect(text).toContain("🤝 Payattu Desk 1 (Priority · House): *Dr. A*");
+    expect(text).toContain("🤝 Payattu Desk 1 (Priority · House construction): *Dr. A*");
     expect(text).toContain("🤝 Payattu Desk 2 (Lottery): *Dr. B*");
     expect(text).toContain("🍽️ വിഭവങ്ങൾ: സുലൈമാനി, പഴംപൊരി");
+  });
+});
+
+describe("Recipient card subtitle", () => {
+  it("shows the full department name", () => {
+    expect(departmentLabel("Arabic")).toBe("Department of Arabic");
+    expect(departmentLabel("Physics")).toBe("Department of Physics");
+    expect(departmentLabel("Department of Physics")).toBe("Department of Physics");
   });
 });
 

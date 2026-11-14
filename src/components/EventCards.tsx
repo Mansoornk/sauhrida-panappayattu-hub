@@ -6,9 +6,8 @@ import {
   deskLabel,
   formatINR,
   formatMonth,
-  REASON_LABELS,
+  departmentLabel,
   SELECTION_LABELS,
-  type PriorityReason,
   type SelectionType,
 } from "@/lib/payatt-rules";
 import { cn } from "@/lib/utils";
@@ -39,7 +38,6 @@ export function EventCard({
   action?: ReactNode;
   emptyText?: string | undefined;
 }) {
-  const reason = event.priority_reason ? REASON_LABELS[event.priority_reason as PriorityReason] : null;
   return (
     <div className="rounded-2xl border border-gold/40 bg-card p-4 shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -51,10 +49,7 @@ export function EventCard({
       {recipient ? (
         <>
           <p className="mt-2 text-lg font-bold text-primary">{recipient.name}</p>
-          <p className="text-sm text-muted-foreground">
-            {recipient.department}
-            {reason ? ` · ${reason.en}` : ""}
-          </p>
+          <p className="text-sm text-muted-foreground">{departmentLabel(recipient.department)}</p>
         </>
       ) : (
         <p className="mt-2 text-sm text-muted-foreground">

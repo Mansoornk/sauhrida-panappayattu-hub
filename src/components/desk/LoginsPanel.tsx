@@ -11,19 +11,12 @@ import { memberAccountsQuery, type Member } from "@/lib/queries";
 import { useSnapshot } from "@/lib/use-payatt";
 import { useRole } from "@/lib/role-context";
 import { issueMemberCredentials } from "@/lib/payatt.functions";
-import { suggestUsername } from "@/lib/payatt-rules";
+import { buildLoginShareText, suggestUsername } from "@/lib/payatt-rules";
 
 type Issued = { member_id: string; name: string; username: string; temp_password: string; reset: boolean };
 
 function shareText(i: Issued, origin: string) {
-  return [
-    "🌿 *Sauhrida Panappayattu* — your member login",
-    `Name: ${i.name}`,
-    `Username: *${i.username}*`,
-    `Temporary password: *${i.temp_password}*`,
-    "",
-    `Open ${origin}/passbook and sign in. You'll be asked to set your own password.`,
-  ].join("\n");
+  return buildLoginShareText({ name: i.name, username: i.username, tempPassword: i.temp_password, link: `${origin}/passbook` });
 }
 
 /** Admin: create usernames + temporary passwords, and reset forgotten ones. */

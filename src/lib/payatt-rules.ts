@@ -372,6 +372,14 @@ export function buildLoginShareText(opts: { name: string; username: string; temp
 
 /* ---------------- Formatting ---------------- */
 
+/** "Arabic" → "Department of Arabic" (kept as-is when already phrased that way). */
+export function departmentLabel(department: string | null | undefined): string {
+  const d = (department ?? "").trim();
+  if (!d) return "";
+  return /^department\b/i.test(d) ? d : `Department of ${d}`;
+}
+
+
 function csvCell(v: unknown): string {
   const s = v == null ? "" : String(v);
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;

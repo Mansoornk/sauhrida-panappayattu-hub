@@ -60,8 +60,12 @@ function TeaPage() {
       desk: e.event_no,
       name: memberMap.get(e.recipient_member_id!)?.name ?? "",
       type: e.selection_type,
+      reason: e.priority_reason,
       appeal: e.appeal_note,
     }));
+  const menuNames = (month?.tea_menu ?? [])
+    .map((id) => TEA_MENU.find((t) => t.id === id)?.ml)
+    .filter((n): n is string => !!n);
   const invite = (to?: string | null) =>
     buildWhatsAppInvite({
       monthLabel: formatMonth(monthKey),
@@ -69,6 +73,7 @@ function TeaPage() {
       time: month?.event_time ?? null,
       venue: month?.venue ?? null,
       hosts,
+      menu: menuNames,
       link: origin,
       personalTo: to ?? null,
     });

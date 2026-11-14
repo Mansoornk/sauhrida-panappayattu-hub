@@ -1,15 +1,29 @@
 {
-  "name": "സൗഹൃദ പണപ്പയറ്റ് — Sauhrida Panappayattu",
-  "short_name": "Panappayattu",
-  "description": "36 Hearts, Zero Interest, Infinite Brotherhood — Sir Syed College, Taliparamba faculty Payatt.",
+  "name": "സൗഹൃദ പണപ്പയറ്റ്",
+  "short_name": "സൗഹൃദ പണപ്പയറ്റ്",
+  "description": "സർ സയ്യിദ് കോളേജ് അധ്യാപകരുടെ സൗഹൃദ പണപ്പയറ്റ്",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#fdfbf7",
   "theme_color": "#064e3b",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
-  ]
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "lang": "ml"
 }
