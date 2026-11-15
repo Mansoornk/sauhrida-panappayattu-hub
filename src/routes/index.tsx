@@ -12,7 +12,6 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
-import { publicSnapshotQuery } from "@/lib/queries";
 import { useActiveMonth, useEventTotals, useMemberMap, useMonthEvents, useSnapshot } from "@/lib/use-payatt";
 import {
   DEFAULT_TIME,
@@ -47,7 +46,6 @@ export const Route = createFileRoute("/")({
       },
     ],
   }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(publicSnapshotQuery),
   component: Scorecard,
 });
 

@@ -1,10 +1,13 @@
 import { useMemo } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { publicSnapshotQuery, type PayattEvent, type PayattMonth } from "./queries";
+import { snapshotQuery, type PayattEvent, type PayattMonth } from "./queries";
+import { useRole } from "./role-context";
 import { addMonths, cycleMonths, CYCLE_START_MONTH, eventTotal, monthKeyOf, todayIST } from "./payatt-rules";
 
+/** Signed-in snapshot. Only rendered inside the signed-in app shell, so a viewer token is always present. */
 export function useSnapshot() {
-  return useSuspenseQuery(publicSnapshotQuery).data;
+  const { viewerToken } = useRole();
+  return useSuspenseQuery(snapshotQuery(viewerToken)).data;
 }
 
 /** The current calendar month's Payatt, or the most recent one. */
@@ -18,9 +21,10 @@ export function useActiveMonth(): { monthKey: string; month: PayattMonth | null;
   }, [months]);
 }
 
+/** Every member ever on the roster (including those who left a slot), so past ledgers keep their names. */
 export function useMemberMap() {
-  const { members } = useSnapshot();
-  return useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
+  const { allMembers } = useSnapshot();
+  return useMemo(() => new Map(allMembers.map((m) => [m.id, m])), [allMembers]);
 }
 
 /** Payattu events of one month, in Payattu-number order. */

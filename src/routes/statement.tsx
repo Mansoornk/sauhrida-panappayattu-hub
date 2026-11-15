@@ -5,7 +5,7 @@ import { z } from "zod";
 import { Lock, Printer } from "lucide-react";
 import logo from "@/assets/sauhrida-logo.png.asset.json";
 import { Button } from "@/components/ui/button";
-import { deskDataQuery, publicSnapshotQuery } from "@/lib/queries";
+import { deskDataQuery } from "@/lib/queries";
 import { useMemberMap, useMonthEvents, useSnapshot } from "@/lib/use-payatt";
 import { useRole } from "@/lib/role-context";
 import {
@@ -33,7 +33,6 @@ export const Route = createFileRoute("/statement")({
       { name: "robots", content: "noindex" },
     ],
   }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(publicSnapshotQuery),
   component: StatementPage,
 });
 

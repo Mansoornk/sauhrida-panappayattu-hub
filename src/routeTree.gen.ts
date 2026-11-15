@@ -17,6 +17,7 @@ import { Route as DrawRouteImport } from './routes/draw'
 import { Route as PassbookRouteImport } from './routes/passbook'
 import { Route as StatementRouteImport } from './routes/statement'
 import { Route as TeaRouteImport } from './routes/tea'
+import { Route as ApiPublicJobsDrawAlertsRouteImport } from './routes/api/public/jobs/draw-alerts'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -58,6 +59,11 @@ const TeaRoute = TeaRouteImport.update({
   path: '/tea',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicJobsDrawAlertsRoute = ApiPublicJobsDrawAlertsRouteImport.update({
+  id: '/api/public/jobs/draw-alerts',
+  path: '/api/public/jobs/draw-alerts',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -68,6 +74,7 @@ export interface FileRoutesByFullPath {
   '/passbook': typeof PassbookRoute
   '/statement': typeof StatementRoute
   '/tea': typeof TeaRoute
+  '/api/public/jobs/draw-alerts': typeof ApiPublicJobsDrawAlertsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByTo {
   '/passbook': typeof PassbookRoute
   '/statement': typeof StatementRoute
   '/tea': typeof TeaRoute
+  '/api/public/jobs/draw-alerts': typeof ApiPublicJobsDrawAlertsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -89,6 +97,7 @@ export interface FileRoutesById {
   '/passbook': typeof PassbookRoute
   '/statement': typeof StatementRoute
   '/tea': typeof TeaRoute
+  '/api/public/jobs/draw-alerts': typeof ApiPublicJobsDrawAlertsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -101,6 +110,7 @@ export interface FileRouteTypes {
     | '/passbook'
     | '/statement'
     | '/tea'
+    | '/api/public/jobs/draw-alerts'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -111,6 +121,7 @@ export interface FileRouteTypes {
     | '/passbook'
     | '/statement'
     | '/tea'
+    | '/api/public/jobs/draw-alerts'
   id:
     | '__root__'
     | '/'
@@ -121,6 +132,7 @@ export interface FileRouteTypes {
     | '/passbook'
     | '/statement'
     | '/tea'
+    | '/api/public/jobs/draw-alerts'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -132,6 +144,7 @@ export interface RootRouteChildren {
   PassbookRoute: typeof PassbookRoute
   StatementRoute: typeof StatementRoute
   TeaRoute: typeof TeaRoute
+  ApiPublicJobsDrawAlertsRoute: typeof ApiPublicJobsDrawAlertsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -192,6 +205,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TeaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/jobs/draw-alerts': {
+      id: '/api/public/jobs/draw-alerts'
+      path: '/api/public/jobs/draw-alerts'
+      fullPath: '/api/public/jobs/draw-alerts'
+      preLoaderRoute: typeof ApiPublicJobsDrawAlertsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -204,6 +224,7 @@ const rootRouteChildren: RootRouteChildren = {
   PassbookRoute: PassbookRoute,
   StatementRoute: StatementRoute,
   TeaRoute: TeaRoute,
+  ApiPublicJobsDrawAlertsRoute: ApiPublicJobsDrawAlertsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

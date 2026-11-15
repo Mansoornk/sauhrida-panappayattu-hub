@@ -1,7 +1,7 @@
-// Server-only: PIN hashing and signed role tokens for Conductor / Admin desks.
+// Server-only: Admin PIN hashing, signed tokens and member passwords.
 const enc = new TextEncoder();
 
-export type StaffRole = "admin" | "conductor";
+export type StaffRole = "admin";
 const TOKEN_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 function b64url(bytes: Uint8Array): string {
@@ -53,7 +53,7 @@ export async function verifyToken(token: string | undefined | null): Promise<Sta
       exp: number;
     };
     if (data.exp < Date.now()) return null;
-    if (data.role !== "admin" && data.role !== "conductor") return null;
+    if (data.role !== "admin") return null;
     return data.role;
   } catch {
     return null;

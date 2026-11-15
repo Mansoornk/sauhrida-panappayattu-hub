@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Role } from "./payatt-rules";
 
-type Session = { role: Exclude<Role, "member">; token: string; exp: number };
+type Session = { role: "admin"; token: string; exp: number };
 export type MemberSession = { token: string; exp: number; memberId: string; name: string; mustChange: boolean };
 
 type RoleContextValue = {
@@ -14,6 +14,8 @@ type RoleContextValue = {
   member: MemberSession | null;
   setMember: (s: MemberSession) => void;
   logoutMember: () => void;
+  /** Token that unlocks the main pages: the Admin's, or a member's once they've set their own password. */
+  viewerToken: string | null;
 };
 
 const KEY = "payatt-desk-session";
@@ -39,7 +41,10 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setSessionState(load<Session>(KEY));
+    const staff = load<Session>(KEY);
+    // Old Conductor PIN sessions are no longer valid: conductors now sign in as members.
+    if (staff && staff.role !== "admin") localStorage.removeItem(KEY);
+    setSessionState(staff?.role === "admin" ? staff : null);
     setMemberState(load<MemberSession>(MEMBER_KEY));
     setReady(true);
   }, []);
@@ -75,6 +80,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         member,
         setMember,
         logoutMember,
+        viewerToken: session?.token ?? (member && !member.mustChange ? member.token : null),
       }}
     >
       {children}

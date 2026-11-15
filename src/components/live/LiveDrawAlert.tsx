@@ -1,20 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
+import { snapshotQuery } from "@/lib/queries";
 import { useQuery } from "@tanstack/react-query";
 import { BellRing, Radio, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { publicSnapshotQuery } from "@/lib/queries";
 import { playChime, useLiveDraw, useLiveDrawSync } from "@/lib/live-draw";
 import { useRole } from "@/lib/role-context";
 import { formatCountdown } from "@/lib/payatt-rules";
 
-const LIVE_PHASES = new Set(["alert", "open", "spinning"]);
+const LIVE_PHASES = new Set(["alert", "open", "spinning", "intermission"]);
 
 /** App-wide: 1-minute pre-draw pop-up + chime, and a "live now" bar while the draw runs. */
 export function LiveDrawAlert() {
   useLiveDrawSync();
+  const { viewerToken } = useRole();
   const snap = useQuery({
-    ...publicSnapshotQuery,
+    ...snapshotQuery(viewerToken),
     // Poll quickly around the draw as a fallback to the live updates.
     refetchInterval: (q) => {
       const d = q.state.data;
@@ -25,12 +26,11 @@ export function LiveDrawAlert() {
     },
   });
   const live = useLiveDraw(snap.data);
-  const { role, member } = useRole();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [dismissed, setDismissed] = useState<string | null>(null);
   const chimed = useRef<string | null>(null);
 
-  const signedIn = (member && !member.mustChange) || role !== "member";
+  const signedIn = !!viewerToken;
   const drawKey = live?.month.draw_at ?? null;
   const showPopup = !!live && live.phase === "alert" && !!signedIn && pathname !== "/draw" && dismissed !== drawKey;
 
@@ -67,7 +67,7 @@ export function LiveDrawAlert() {
             The lucky wheel draw starts in{" "}
             <span className="font-mono font-bold text-primary">{formatCountdown(live.msLeft)}</span>
           </p>
-          <Button asChild variant="gold" size="xl" className="mt-4 w-full">
+          <Button asChild variant="gold" size="xl" className="mt-4 w-full animate-pulse">
             <Link to="/draw" onClick={() => setDismissed(drawKey)}>
               Join Live Draw Now
             </Link>
@@ -85,7 +85,11 @@ export function LiveDrawAlert() {
       >
         <Radio className="size-5 shrink-0 animate-pulse text-gold" />
         <span className="flex-1 text-sm font-semibold">
-          {live.phase === "spinning" ? "The lucky wheel is spinning now" : "Live lucky draw is open"}
+          {live.phase === "spinning"
+            ? "The lucky wheel is spinning now"
+            : live.phase === "intermission"
+              ? "Spin 2 unlocks in a few seconds"
+              : "Live lucky draw is open"}
         </span>
         <span className="rounded-full bg-gold-gradient px-3 py-1 text-xs font-bold text-gold-foreground">Join</span>
       </Link>

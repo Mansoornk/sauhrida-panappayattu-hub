@@ -9,7 +9,7 @@ import { SpinWheel, type SpinWheelHandle } from "@/components/SpinWheel";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { deskDataQuery, publicSnapshotQuery } from "@/lib/queries";
+import { deskDataQuery, SNAPSHOT_KEY } from "@/lib/queries";
 import { useActiveMonth, useMemberMap, useMonthEvents, useSnapshot } from "@/lib/use-payatt";
 import { useRole } from "@/lib/role-context";
 import { confirmLotteryWinner, saveMonth } from "@/lib/payatt.functions";
@@ -35,7 +35,6 @@ export const Route = createFileRoute("/draw")({
       { property: "og:description", content: "Opens 2–3 days before the Payattu, run by the Admin." },
     ],
   }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(publicSnapshotQuery),
   component: DrawPage,
 });
 
@@ -77,7 +76,7 @@ function DrawPage() {
       await save({
         data: { token, month: month.month, payatt_date: month.payatt_date, venue: month.venue, wheel_override: v },
       });
-      await qc.invalidateQueries({ queryKey: publicSnapshotQuery.queryKey });
+      await qc.invalidateQueries({ queryKey: SNAPSHOT_KEY });
       toast.success(v ? "Test override ON — wheel unlocked" : "Override OFF — wheel follows the date lock");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not update");
@@ -89,7 +88,7 @@ function DrawPage() {
     setBusy(true);
     try {
       await confirm({ data: { token, event_id: target.id, member_id: winner.id } });
-      await qc.invalidateQueries({ queryKey: publicSnapshotQuery.queryKey });
+      await qc.invalidateQueries({ queryKey: SNAPSHOT_KEY });
       toast.success(`${winner.label} is ${deskLabel(target.event_no).en} for ${formatMonth(monthKey)}`);
       setWinner(null);
     } catch (e) {

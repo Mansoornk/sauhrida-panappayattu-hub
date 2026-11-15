@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { publicSnapshotQuery, type PublicSnapshot } from "./queries";
+import { SNAPSHOT_KEY, type Snapshot } from "./queries";
 import { liveDrawPhase, todayIST } from "./payatt-rules";
 
 /** Ticking clock; null until mounted so server and browser render the same HTML. */
@@ -19,7 +19,7 @@ export function useNow(intervalMs = 1000): number | null {
  * The month members should watch for the live draw: the earliest upcoming month
  * with a lottery desk, preferring one whose draw time is already announced.
  */
-function pickLiveMonth(snap: PublicSnapshot, today: string) {
+function pickLiveMonth(snap: Snapshot, today: string) {
   const lotteryMonths = new Set(snap.events.filter((e) => e.selection_type === "lottery").map((e) => e.month));
   const upcoming = snap.months
     .filter((m) => lotteryMonths.has(m.month) && m.payatt_date >= today)
@@ -27,7 +27,7 @@ function pickLiveMonth(snap: PublicSnapshot, today: string) {
   return upcoming.find((m) => m.draw_at || m.wheel_override) ?? upcoming[0] ?? null;
 }
 
-export function computeLive(snap: PublicSnapshot, now: number) {
+export function computeLive(snap: Snapshot, now: number) {
   const month = pickLiveMonth(snap, todayIST(new Date(now)));
   if (!month) return null;
   const events = snap.events.filter((e) => e.month === month.month).sort((a, b) => a.event_no - b.event_no);
@@ -38,19 +38,20 @@ export function computeLive(snap: PublicSnapshot, now: number) {
 
 export type LiveState = NonNullable<ReturnType<typeof computeLive>>;
 
-export function useLiveDraw(snap: PublicSnapshot | undefined): LiveState | null {
+export function useLiveDraw(snap: Snapshot | undefined): LiveState | null {
   const now = useNow(1000);
   return useMemo(() => (snap && now !== null ? computeLive(snap, now + snap.clockOffset) : null), [snap, now]);
 }
 
-/** Refreshes everyone's data the instant a live spin is claimed. Mount once. */
+/** Refreshes everyone's data the instant a live spin is claimed or a desk changes. Mount once. */
 export function useLiveDrawSync() {
   const qc = useQueryClient();
   useEffect(() => {
+    // Data-free "something changed" doorbell; the data itself is re-read through the signed-in API.
     const channel = supabase
-      .channel(`live-draws-${Math.random().toString(36).slice(2)}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "live_draws" }, () => {
-        void qc.invalidateQueries({ queryKey: publicSnapshotQuery.queryKey });
+      .channel("payatt-live")
+      .on("broadcast", { event: "changed" }, () => {
+        void qc.invalidateQueries({ queryKey: SNAPSHOT_KEY });
       })
       .subscribe();
     return () => {

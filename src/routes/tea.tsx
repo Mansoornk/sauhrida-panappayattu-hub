@@ -9,7 +9,7 @@ import { MemberSelect } from "@/components/MemberSelect";
 import { SelectionBadge } from "@/components/EventCards";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { publicSnapshotQuery, type PayattEvent } from "@/lib/queries";
+import { SNAPSHOT_KEY, type PayattEvent } from "@/lib/queries";
 import { useActiveMonth, useMemberMap, useMonthEvents, useSnapshot } from "@/lib/use-payatt";
 import { useRole } from "@/lib/role-context";
 import { saveHostDesk } from "@/lib/payatt.functions";
@@ -37,7 +37,6 @@ export const Route = createFileRoute("/tea")({
       { property: "og:description", content: "Host Desk with appeal notes and one-tap WhatsApp invitations." },
     ],
   }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(publicSnapshotQuery),
   component: TeaPage,
 });
 
@@ -205,7 +204,7 @@ function AppealEditor({
           appeal_note: text.trim() || null,
         },
       });
-      await qc.invalidateQueries({ queryKey: publicSnapshotQuery.queryKey });
+      await qc.invalidateQueries({ queryKey: SNAPSHOT_KEY });
       toast.success("Appeal saved");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save");
@@ -286,7 +285,7 @@ function MenuBuilder({
           tea_menu: picked,
         },
       });
-      await qc.invalidateQueries({ queryKey: publicSnapshotQuery.queryKey });
+      await qc.invalidateQueries({ queryKey: SNAPSHOT_KEY });
       toast.success(picked.length ? "Menu saved — shown on the home page" : "Menu cleared");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save");

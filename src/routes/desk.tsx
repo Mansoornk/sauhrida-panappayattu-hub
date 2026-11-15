@@ -32,7 +32,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { deskDataQuery, publicSnapshotQuery, type DeskContribution, type Member } from "@/lib/queries";
+import { deskDataQuery, SNAPSHOT_KEY, type DeskContribution, type Member } from "@/lib/queries";
 import { useActiveMonth, useCycleMonthOptions, useMemberMap, useSnapshot } from "@/lib/use-payatt";
 import { useRole } from "@/lib/role-context";
 import { changePin, publishLedger, reviewContribution, updateMember } from "@/lib/payatt.functions";
@@ -48,7 +48,6 @@ export const Route = createFileRoute("/desk")({
       { name: "robots", content: "noindex" },
     ],
   }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(publicSnapshotQuery),
   component: DeskPage,
 });
 
@@ -170,7 +169,7 @@ function ReviewPanel({ month }: { month: string }) {
     try {
       await review({ data: { token, id, action } });
       await qc.invalidateQueries({ queryKey: ["desk"] });
-      if (action !== "verify") await qc.invalidateQueries({ queryKey: publicSnapshotQuery.queryKey });
+      if (action !== "verify") await qc.invalidateQueries({ queryKey: SNAPSHOT_KEY });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Action failed");
     } finally {
@@ -192,7 +191,7 @@ function ReviewPanel({ month }: { month: string }) {
       const res = await publish({ data: { token, month, include_pending: includePending } });
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["desk"] }),
-        qc.invalidateQueries({ queryKey: publicSnapshotQuery.queryKey }),
+        qc.invalidateQueries({ queryKey: SNAPSHOT_KEY }),
       ]);
       toast.success(`Published ${res.count} verified entr${res.count === 1 ? "y" : "ies"} to the site`);
     } catch (e) {
@@ -396,7 +395,7 @@ function MemberForm({ member, onDone }: { member: Member; onDone: () => void }) 
     setBusy(true);
     try {
       await update({ data: { token, id: member.id, ...f } });
-      await qc.invalidateQueries({ queryKey: publicSnapshotQuery.queryKey });
+      await qc.invalidateQueries({ queryKey: SNAPSHOT_KEY });
       toast.success("Member updated");
       onDone();
     } catch (e) {

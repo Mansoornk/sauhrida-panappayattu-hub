@@ -1,7 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import type { Database } from "@/integrations/supabase/types";
 import {
   generateTempPassword,
   hashPassword,
@@ -15,7 +13,9 @@ import {
 } from "./session.server";
 import {
   canSpinWheel,
+  conductorDeskEvents,
   cycleMonthNumber,
+  slotProblem,
   DEFAULT_TIME,
   DEFAULT_VENUE,
   monthKeyOf,
@@ -40,66 +40,56 @@ async function admin() {
   return supabaseAdmin;
 }
 
-function publicClient() {
-  const url = process.env["SUPABASE_URL"]!;
-  const key = process.env["SUPABASE_PUBLISHABLE_KEY"]!;
-  return createClient<Database>(url, key, {
-    auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
-    global: {
-      fetch: (input, init) => {
-        const h = new Headers(init?.headers);
-        if (key.startsWith("sb_") && h.get("Authorization") === `Bearer ${key}`)
-          h.delete("Authorization");
-        h.set("apikey", key);
-        return fetch(input, { ...init, headers: h });
-      },
-    },
-  });
-}
-
 function fail(error: { message: string } | null) {
   if (error) throw new Error(error.message);
 }
 
-/* ---------------- Public (members) ---------------- */
+/* ---------------- Signed-in snapshot ---------------- */
 
-export const getPublicSnapshot = createServerFn({ method: "GET" }).handler(async () => {
-  const sb = publicClient();
-  const [members, months, events, contributions, tea, draws] = await Promise.all([
-    sb.from("members").select("id, slot_no, name, department, has_conducted, conducted_month").order("slot_no"),
-    sb
-      .from("payatt_months")
-      .select("id, month, payatt_date, venue, event_time, draw_at, tea_menu, wheel_override, ledger_published, published_at")
-      .order("month", { ascending: false }),
-    sb.from("payatt_events").select("*").order("month", { ascending: false }).order("event_no"),
-    sb
-      .from("contributions")
-      .select("id, member_id, event_id, month, amount, status, published, created_at")
-      .eq("status", "verified")
-      .eq("published", true),
-    sb.from("tea_parties").select("*").order("party_date", { ascending: false }),
-    sb.from("live_draws").select("*").order("started_at", { ascending: false }).limit(48),
-  ]);
-  fail(draws.error);
-  fail(members.error);
-  fail(months.error);
-  fail(events.error);
-  fail(contributions.error);
-  fail(tea.error);
-  return {
-    members: members.data ?? [],
-    months: months.data ?? [],
-    events: events.data ?? [],
-    contributions: contributions.data ?? [],
-    teaParties: tea.data ?? [],
-    liveDraws: draws.data ?? [],
-    serverNow: Date.now(),
-  };
-});
+/** Everything on the main pages. Only signed-in members (after their first password change) and the Admin see it. */
+export const getSnapshot = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ token: tokenSchema }).parse(d))
+  .handler(async ({ data }) => {
+    const sb = await admin();
+    await requireViewer(sb, data.token);
+    const [members, months, events, contributions, tea, draws] = await Promise.all([
+      sb
+        .from("members")
+        .select("id, slot_no, name, department, has_conducted, conducted_month, removed_at")
+        .order("slot_no"),
+      sb
+        .from("payatt_months")
+        .select("id, month, payatt_date, venue, event_time, draw_at, tea_menu, wheel_override, ledger_published, published_at")
+        .order("month", { ascending: false }),
+      sb.from("payatt_events").select("*").order("month", { ascending: false }).order("event_no"),
+      sb
+        .from("contributions")
+        .select("id, member_id, event_id, month, amount, status, published, created_at")
+        .eq("status", "verified")
+        .eq("published", true),
+      sb.from("tea_parties").select("*").order("party_date", { ascending: false }),
+      sb.from("live_draws").select("*").order("started_at", { ascending: false }).limit(48),
+    ]);
+    fail(draws.error);
+    fail(members.error);
+    fail(months.error);
+    fail(events.error);
+    fail(contributions.error);
+    fail(tea.error);
+    return {
+      allMembers: members.data ?? [],
+      months: months.data ?? [],
+      events: events.data ?? [],
+      contributions: contributions.data ?? [],
+      teaParties: tea.data ?? [],
+      liveDraws: draws.data ?? [],
+      serverNow: Date.now(),
+    };
+  });
 
 export const loginStaff = createServerFn({ method: "POST" })
   .inputValidator((d) =>
-    z.object({ role: z.enum(["admin", "conductor"]), pin: z.string().regex(/^\d{4,8}$/) }).parse(d),
+    z.object({ role: z.literal("admin"), pin: z.string().regex(/^\d{4,8}$/) }).parse(d),
   )
   .handler(async ({ data }) => {
     const sb = await admin();
@@ -138,6 +128,20 @@ async function requireMember(sb: AdminClient, token: string | undefined, opts: {
   return acc;
 }
 
+/** A signed-in viewer: the Admin (PIN) or a member who has set their own password. */
+async function requireViewer(sb: AdminClient, token: string) {
+  if ((await verifyToken(token)) === "admin") return { kind: "admin" as const, memberId: null };
+  const acc = await requireMember(sb, token);
+  return { kind: "member" as const, memberId: acc.member_id };
+}
+
+/** The desks a member conducts (they are the recipient), this month or later. */
+async function myConductorEvents(sb: AdminClient, memberId: string) {
+  const { data, error } = await sb.from("payatt_events").select("*").eq("recipient_member_id", memberId);
+  fail(error);
+  return conductorDeskEvents(data ?? [], memberId, todayIST());
+}
+
 export const loginMember = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z.object({ username: z.string().trim().toLowerCase().min(3).max(30), password: z.string().min(1).max(100) }).parse(d),
@@ -146,11 +150,12 @@ export const loginMember = createServerFn({ method: "POST" })
     const sb = await admin();
     const { data: acc, error } = await sb
       .from("member_accounts")
-      .select("member_id, password_hash, password_salt, session_version, must_change_password, members(name)")
+      .select("member_id, password_hash, password_salt, session_version, must_change_password, members(name, removed_at)")
       .eq("username", data.username)
       .maybeSingle();
     fail(error);
-    const ok = acc ? await verifyPassword(data.password, acc.password_salt, acc.password_hash) : false;
+    const removed = !!(acc?.members as { removed_at: string | null } | null)?.removed_at;
+    const ok = acc && !removed ? await verifyPassword(data.password, acc.password_salt, acc.password_hash) : false;
     if (!acc || !ok) {
       await new Promise((r) => setTimeout(r, 600));
       return { ok: false as const, error: "Incorrect username or password" };
@@ -251,7 +256,7 @@ export const issueMemberCredentials = createServerFn({ method: "POST" })
       throw new Error("Username: 3–30 lowercase letters, numbers, dot or underscore");
     const sb = await admin();
     const [members, accounts] = await Promise.all([
-      sb.from("members").select("id, slot_no, name").in("id", data.member_ids),
+      sb.from("members").select("id, slot_no, name").in("id", data.member_ids).is("removed_at", null),
       sb.from("member_accounts").select("member_id, username, session_version"),
     ]);
     fail(members.error);
@@ -323,17 +328,27 @@ const contributionInput = z.object({
   payment_method: z.enum(["cash", "upi"]).optional(),
   token: tokenSchema.optional(),
   member_token: tokenSchema.optional(),
+  /** A conductor entering a cash/UPI payment for someone else into their own desk. */
+  as_conductor: z.boolean().optional(),
 });
 
 export const submitContribution = createServerFn({ method: "POST" })
   .inputValidator((d) => contributionInput.parse(d))
   .handler(async ({ data }) => {
     const sb = await admin();
-    const role = data.token ? await verifyToken(data.token) : null;
+    const role = data.token ? await requireRole(data.token, ["admin"]) : null;
     let memberId: string;
+    let enteredBy: "admin" | "conductor" | null = role;
     if (role) {
       if (!data.member_id) throw new Error("Choose the member");
       memberId = data.member_id;
+    } else if (data.as_conductor) {
+      const acc = await requireMember(sb, data.member_token);
+      const mine = await myConductorEvents(sb, acc.member_id);
+      if (!mine.some((e) => e.id === data.event_id)) throw new Error("You can only add entries to your own Payattu Desk");
+      if (!data.member_id) throw new Error("Choose the member");
+      memberId = data.member_id;
+      enteredBy = "conductor";
     } else {
       const acc = await requireMember(sb, data.member_token);
       memberId = acc.member_id;
@@ -346,6 +361,8 @@ export const submitContribution = createServerFn({ method: "POST" })
       .maybeSingle();
     fail(evErr);
     if (!ev) throw new Error("This Payattu no longer exists");
+    const { data: giver } = await sb.from("members").select("removed_at").eq("id", memberId).maybeSingle();
+    if (!giver || giver.removed_at) throw new Error("This member is no longer on the roster");
     if (ev.recipient_member_id === memberId)
       throw new Error("The recipient doesn't contribute to their own Payattu");
 
@@ -356,7 +373,7 @@ export const submitContribution = createServerFn({ method: "POST" })
       .eq("member_id", memberId)
       .neq("status", "rejected")
       .maybeSingle();
-    if (dup) throw new Error("A contribution to this recipient is already recorded. Ask a Conductor to correct it.");
+    if (dup) throw new Error("A contribution to this recipient is already recorded. Ask the desk's Conductor to correct it.");
 
     let screenshot_path: string | null = null;
     if (data.screenshot) {
@@ -370,7 +387,7 @@ export const submitContribution = createServerFn({ method: "POST" })
       fail(up.error);
     }
 
-    const staff = role !== null;
+    const staff = enteredBy !== null;
     const { error } = await sb.from("contributions").insert({
       member_id: memberId,
       event_id: ev.id,
@@ -380,9 +397,9 @@ export const submitContribution = createServerFn({ method: "POST" })
       payment_method: data.payment_method ?? (data.utr ? "upi" : null),
       screenshot_path,
       note: data.note || null,
-      entered_by: role ?? "member",
+      entered_by: enteredBy ?? "member",
       status: staff ? "verified" : "pending",
-      verified_by: role,
+      verified_by: enteredBy,
       verified_at: staff ? new Date().toISOString() : null,
       published: false,
     });
@@ -390,12 +407,12 @@ export const submitContribution = createServerFn({ method: "POST" })
     return { ok: true, status: staff ? "verified" : "pending" };
   });
 
-/* ---------------- Desk (conductor + admin) ---------------- */
+/* ---------------- Admin desk ---------------- */
 
 export const getDeskData = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ token: tokenSchema, month: monthKey }).parse(d))
   .handler(async ({ data }) => {
-    const role = await requireRole(data.token, ["admin", "conductor"]);
+    const role = await requireRole(data.token, ["admin"]);
     const sb = await admin();
     const [monthRows, allVerified] = await Promise.all([
       sb.from("contributions").select("*").eq("month", data.month).order("created_at", { ascending: false }),
@@ -420,39 +437,77 @@ export const reviewContribution = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z
       .object({
-        token: tokenSchema,
+        token: tokenSchema.optional(),
+        member_token: tokenSchema.optional(),
         id: z.string().uuid(),
         action: z.enum(["verify", "reject", "delete"]),
       })
       .parse(d),
   )
   .handler(async ({ data }) => {
-    const role = await requireRole(data.token, ["admin", "conductor"]);
     const sb = await admin();
+    const isAdmin = data.token ? (await requireRole(data.token, ["admin"])) === "admin" : false;
+    const { data: existing } = await sb
+      .from("contributions")
+      .select("published, event_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!existing) throw new Error("This entry no longer exists");
+    if (!isAdmin) {
+      const acc = await requireMember(sb, data.member_token);
+      const mine = await myConductorEvents(sb, acc.member_id);
+      if (!mine.some((e) => e.id === existing.event_id)) throw new Error("This entry belongs to another Payattu Desk");
+      if (data.action === "delete") throw new Error("Only the Admin can delete entries");
+      if (existing.published) throw new Error("This entry is already published. Only the Admin can change it.");
+    }
     if (data.action === "delete") {
-      if (role !== "admin") throw new Error("Only the Admin can delete entries");
       const { error } = await sb.from("contributions").delete().eq("id", data.id);
       fail(error);
       return { ok: true };
     }
-    const { data: existing } = await sb
-      .from("contributions")
-      .select("published")
-      .eq("id", data.id)
-      .maybeSingle();
-    if (existing?.published && role !== "admin")
-      throw new Error("This entry is already published. Only the Admin can change it.");
     const { error } = await sb
       .from("contributions")
       .update({
         status: data.action === "verify" ? "verified" : "rejected",
-        verified_by: role,
+        verified_by: isAdmin ? "admin" : "conductor",
         verified_at: new Date().toISOString(),
-        published: data.action === "verify" ? (existing?.published ?? false) : false,
+        published: data.action === "verify" ? existing.published : false,
       })
       .eq("id", data.id);
     fail(error);
     return { ok: true };
+  });
+
+/* ---------------- Conductor desk (a member running their own desk) ---------------- */
+
+/** The signed-in member's own desk(s) and every entry made to them. Other desks are never returned. */
+export const getConductorDesk = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ member_token: tokenSchema }).parse(d))
+  .handler(async ({ data }) => {
+    const sb = await admin();
+    const acc = await requireMember(sb, data.member_token);
+    const events = await myConductorEvents(sb, acc.member_id);
+    if (events.length === 0) return { events: [], contributions: [] };
+    const { data: rows, error } = await sb
+      .from("contributions")
+      .select("id, member_id, event_id, month, amount, status, published, utr, payment_method, note, entered_by, screenshot_path, created_at")
+      .in(
+        "event_id",
+        events.map((e) => e.id),
+      )
+      .order("created_at", { ascending: false });
+    fail(error);
+    const contributions = await Promise.all(
+      (rows ?? []).map(async ({ screenshot_path, ...r }) => {
+        let screenshot_url: string | null = null;
+        if (screenshot_path) {
+          const s = await sb.storage.from("payment-screenshots").createSignedUrl(screenshot_path, 3600);
+          screenshot_url = s.data?.signedUrl ?? null;
+        }
+        return { ...r, screenshot_url };
+      }),
+    );
+    return { events, contributions };
   });
 
 export const publishLedger = createServerFn({ method: "POST" })
@@ -525,6 +580,7 @@ export const saveMonth = createServerFn({ method: "POST" })
     if (data.draw_at && new Date(data.draw_at).getTime() > new Date(`${data.payatt_date}T23:59:59+05:30`).getTime())
       throw new Error("The live draw must be on or before the Payattu date");
     if (cycleMonthNumber(data.month) < 1) throw new Error("The Payattu timeline starts in October 2026");
+    if (cycleMonthNumber(data.month) > 120) throw new Error("Pick a month within the next few years");
     if (monthKeyOf(data.payatt_date) !== data.month) throw new Error("The Payattu date must be in the same month");
     const sb = await admin();
     const { error } = await sb.from("payatt_months").upsert(
@@ -533,7 +589,7 @@ export const saveMonth = createServerFn({ method: "POST" })
         payatt_date: data.payatt_date,
         venue: data.venue || DEFAULT_VENUE,
         ...(data.event_time !== undefined ? { event_time: data.event_time || DEFAULT_TIME } : {}),
-        ...(data.draw_at !== undefined ? { draw_at: data.draw_at } : {}),
+        ...(data.draw_at !== undefined ? { draw_at: data.draw_at, draw_alert_sent_at: null } : {}),
         wheel_override: data.wheel_override,
       },
       { onConflict: "month" },
@@ -577,6 +633,10 @@ export const saveEvent = createServerFn({ method: "POST" })
     const next = [...(existing ?? []).filter((e) => e.id !== data.id), row];
     const problem = validateMonthEvents(data.month, next);
     if (problem) throw new Error(problem);
+    if (row.recipient_member_id && row.recipient_member_id !== prev?.recipient_member_id) {
+      const { data: rm } = await sb.from("members").select("removed_at").eq("id", row.recipient_member_id).maybeSingle();
+      if (!rm || rm.removed_at) throw new Error("This member is no longer on the roster");
+    }
     if (row.recipient_member_id) {
       const { data: paidIn } = await sb
         .from("contributions")
@@ -707,7 +767,7 @@ export const confirmLotteryWinner = createServerFn({ method: "POST" })
     if (!canSpinWheel({ role: "admin", today: todayIST(), payattDate: m.payatt_date, override: m.wheel_override }))
       throw new Error("The wheel is locked. It opens only on the day before the Payatt date.");
     const [members, verified, siblings] = await Promise.all([
-      sb.from("members").select("id, has_conducted"),
+      sb.from("members").select("id, has_conducted").is("removed_at", null),
       sb.from("contributions").select("member_id, month, amount, status").eq("status", "verified"),
       sb.from("payatt_events").select("recipient_member_id").eq("month", ev.month),
     ]);
@@ -732,6 +792,7 @@ export const updateMember = createServerFn({ method: "POST" })
         name: z.string().trim().min(2).max(80),
         department: z.string().trim().min(2).max(60),
         phone: z.string().trim().max(20).optional().nullable(),
+        slot_no: z.number().int().optional(),
         has_conducted: z.boolean(),
       })
       .parse(d),
@@ -739,12 +800,18 @@ export const updateMember = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requireRole(data.token, ["admin"]);
     const sb = await admin();
+    if (data.slot_no !== undefined) {
+      const { data: others } = await sb.from("members").select("slot_no").is("removed_at", null).neq("id", data.id);
+      const problem = slotProblem(data.slot_no, (others ?? []).map((m) => m.slot_no));
+      if (problem) throw new Error(problem);
+    }
     const { error } = await sb
       .from("members")
       .update({
         name: data.name,
         department: data.department,
-        phone: data.phone || null,
+        ...(data.phone ? { phone: data.phone } : {}),
+        ...(data.slot_no !== undefined ? { slot_no: data.slot_no } : {}),
         has_conducted: data.has_conducted,
         ...(data.has_conducted ? {} : { conducted_month: null }),
       })
@@ -770,7 +837,7 @@ export const saveTeaParty = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }) => {
-    await requireRole(data.token, ["admin", "conductor"]);
+    await requireRole(data.token, ["admin"]);
     const sb = await admin();
     const { token: _t, id, ...row } = data;
     const clean = {
@@ -791,7 +858,7 @@ export const saveTeaParty = createServerFn({ method: "POST" })
 export const deleteTeaParty = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ token: tokenSchema, id: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
-    await requireRole(data.token, ["admin", "conductor"]);
+    await requireRole(data.token, ["admin"]);
     const sb = await admin();
     const { error } = await sb.from("tea_parties").delete().eq("id", data.id);
     fail(error);
@@ -803,7 +870,7 @@ export const changePin = createServerFn({ method: "POST" })
     z
       .object({
         token: tokenSchema,
-        role: z.enum(["admin", "conductor"]),
+        role: z.literal("admin"),
         pin: z.string().regex(/^\d{4,8}$/, "PIN must be 4–8 digits"),
       })
       .parse(d),
@@ -980,8 +1047,8 @@ export const startLiveSpin = createServerFn({ method: "POST" })
       const { data: me } = await sb.from("members").select("id, name").eq("id", acc.member_id).single();
       spunBy = { id: acc.member_id, name: me?.name ?? acc.username };
     } else {
-      const role = await requireRole(data.token, ["admin", "conductor"]);
-      spunBy = { id: null, name: role === "admin" ? "Admin" : "Payattu Desk" };
+      await requireRole(data.token, ["admin"]);
+      spunBy = { id: null, name: "Admin" };
     }
 
     const { data: ev } = await sb.from("payatt_events").select("*").eq("id", data.event_id).maybeSingle();
@@ -990,7 +1057,7 @@ export const startLiveSpin = createServerFn({ method: "POST" })
       sb.from("payatt_months").select("*").eq("month", ev.month).maybeSingle(),
       sb.from("payatt_events").select("*").eq("month", ev.month),
       sb.from("live_draws").select("*").eq("month", ev.month),
-      sb.from("members").select("id, name, slot_no, has_conducted").order("slot_no"),
+      sb.from("members").select("id, name, slot_no, has_conducted").is("removed_at", null).order("slot_no"),
       sb.from("contributions").select("member_id, month, amount, status").eq("status", "verified"),
     ]);
     const m = monthRes.data;
@@ -1054,13 +1121,14 @@ export const startLiveSpin = createServerFn({ method: "POST" })
     return { ok: true as const, draw: ins.data! };
   });
 
-/** Names currently on the live wheel for a month (public: names are already public). */
+/** Names currently on the live wheel for a month (signed-in viewers only). */
 export const getLiveRoster = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ month: monthKey }).parse(d))
+  .inputValidator((d) => z.object({ token: tokenSchema, month: monthKey }).parse(d))
   .handler(async ({ data }) => {
     const sb = await admin();
+    await requireViewer(sb, data.token);
     const [membersRes, verifiedRes, eventsRes] = await Promise.all([
-      sb.from("members").select("id, name, slot_no, has_conducted").order("slot_no"),
+      sb.from("members").select("id, name, slot_no, has_conducted").is("removed_at", null).order("slot_no"),
       sb.from("contributions").select("member_id, month, amount, status").eq("status", "verified"),
       sb.from("payatt_events").select("recipient_member_id").eq("month", data.month),
     ]);
@@ -1070,4 +1138,127 @@ export const getLiveRoster = createServerFn({ method: "POST" })
       verifiedRes.data ?? [],
       (eventsRes.data ?? []).map((e) => e.recipient_member_id),
     ).map((m) => ({ id: m.id, label: m.name }));
+  });
+
+/* ---------------- 36-slot roster (admin) ---------------- */
+
+/** Puts a new faculty member into a free slot and issues their login. */
+export const addMember = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    z
+      .object({
+        token: tokenSchema,
+        slot_no: z.number().int(),
+        name: z.string().trim().min(2).max(80),
+        department: z.string().trim().min(2).max(60),
+        phone: z.string().trim().max(20).optional().nullable(),
+        username: z.string().trim().toLowerCase(),
+        temp_password: z.string().min(1).max(100),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }) => {
+    await requireRole(data.token, ["admin"]);
+    if (!isValidUsername(data.username)) throw new Error("Username: 3–30 lowercase letters, numbers, dot or underscore");
+    const pwProblem = passwordProblem(data.temp_password);
+    if (pwProblem) throw new Error(`Temporary password: ${pwProblem.toLowerCase()}`);
+    const sb = await admin();
+    const [active, taken] = await Promise.all([
+      sb.from("members").select("slot_no").is("removed_at", null),
+      sb.from("member_accounts").select("member_id").eq("username", data.username).maybeSingle(),
+    ]);
+    fail(active.error);
+    const problem = slotProblem(data.slot_no, (active.data ?? []).map((m) => m.slot_no));
+    if (problem) throw new Error(problem);
+    if (taken.data) throw new Error(`Username "${data.username}" is already taken`);
+    const ins = await sb
+      .from("members")
+      .insert({ slot_no: data.slot_no, name: data.name, department: data.department, phone: data.phone || null })
+      .select("id")
+      .single();
+    if (ins.error?.code === "23505") throw new Error(`Slot ${data.slot_no} is already taken`);
+    fail(ins.error);
+    const { hash, salt } = await hashPassword(data.temp_password);
+    const acc = await sb.from("member_accounts").insert({
+      member_id: ins.data.id,
+      username: data.username,
+      password_hash: hash,
+      password_salt: salt,
+      must_change_password: true,
+    });
+    if (acc.error) {
+      await sb.from("members").delete().eq("id", ins.data.id);
+      fail(acc.error);
+    }
+    return { ok: true, member_id: ins.data.id, name: data.name, username: data.username, temp_password: data.temp_password };
+  });
+
+/** Frees a slot. The member's past payments and Payattu stay in every ledger; their login stops working. */
+export const removeMember = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ token: tokenSchema, id: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    await requireRole(data.token, ["admin"]);
+    const sb = await admin();
+    const { data: open } = await sb
+      .from("payatt_events")
+      .select("id")
+      .eq("recipient_member_id", data.id)
+      .gte("month", monthKeyOf(todayIST()))
+      .limit(1);
+    if (open?.length) throw new Error("This member is a recipient this month or later. Change that desk first.");
+    const { error } = await sb
+      .from("members")
+      .update({ removed_at: new Date().toISOString() })
+      .eq("id", data.id)
+      .is("removed_at", null);
+    fail(error);
+    const { data: acc } = await sb.from("member_accounts").select("session_version").eq("member_id", data.id).maybeSingle();
+    if (acc) {
+      await sb
+        .from("member_accounts")
+        .update({ session_version: acc.session_version + 1, updated_at: new Date().toISOString() })
+        .eq("member_id", data.id);
+    }
+    await sb.from("push_subscriptions").delete().eq("member_id", data.id);
+    return { ok: true };
+  });
+
+/* ---------------- Draw alerts on phones ---------------- */
+
+export const getPushPublicKey = createServerFn({ method: "GET" }).handler(async () => {
+  const { getVapidKeys } = await import("./web-push.server");
+  return { publicKey: (await getVapidKeys()).publicKey };
+});
+
+const pushSubscription = z.object({
+  endpoint: z.string().url().max(1000).startsWith("https://"),
+  keys: z.object({ p256dh: z.string().max(200), auth: z.string().max(100) }),
+});
+
+export const savePushSubscription = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ token: tokenSchema, subscription: pushSubscription }).parse(d))
+  .handler(async ({ data }) => {
+    const sb = await admin();
+    const viewer = await requireViewer(sb, data.token);
+    const { error } = await sb.from("push_subscriptions").upsert(
+      {
+        endpoint: data.subscription.endpoint,
+        p256dh: data.subscription.keys.p256dh,
+        auth: data.subscription.keys.auth,
+        member_id: viewer.memberId,
+      },
+      { onConflict: "endpoint" },
+    );
+    fail(error);
+    return { ok: true };
+  });
+
+export const deletePushSubscription = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ token: tokenSchema, endpoint: z.string().url().max(1000) }).parse(d))
+  .handler(async ({ data }) => {
+    const sb = await admin();
+    await requireViewer(sb, data.token);
+    const { error } = await sb.from("push_subscriptions").delete().eq("endpoint", data.endpoint);
+    fail(error);
+    return { ok: true };
   });

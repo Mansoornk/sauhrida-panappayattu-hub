@@ -10,7 +10,7 @@ import { EventHistory, SelectionBadge } from "@/components/EventCards";
 import { PriorityRequestCard } from "@/components/PriorityRequestCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { myDashboardQuery, publicSnapshotQuery, type Member, type MyDashboard } from "@/lib/queries";
+import { myDashboardQuery, type Member, type MyDashboard } from "@/lib/queries";
 import { useEventTotals, useMemberMap, useSnapshot } from "@/lib/use-payatt";
 import { useRole } from "@/lib/role-context";
 import { buildPassbook, formatDate, formatINR, formatMonth } from "@/lib/payatt-rules";
@@ -27,7 +27,6 @@ export const Route = createFileRoute("/passbook")({
       { property: "og:type", content: "website" },
     ],
   }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(publicSnapshotQuery),
   component: PassbookPage,
 });
 

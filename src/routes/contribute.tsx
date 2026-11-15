@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { myDashboardQuery, publicSnapshotQuery } from "@/lib/queries";
+import { myDashboardQuery, SNAPSHOT_KEY } from "@/lib/queries";
 import { useActiveMonth, useMemberMap, useSnapshot } from "@/lib/use-payatt";
 import { useRole } from "@/lib/role-context";
 import { submitContribution } from "@/lib/payatt.functions";
@@ -33,7 +33,6 @@ export const Route = createFileRoute("/contribute")({
       { property: "og:description", content: "Choose the recipient, enter your amount. UTR and screenshot are optional." },
     ],
   }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(publicSnapshotQuery),
   component: ContributePage,
 });
 
@@ -129,7 +128,7 @@ function ContributePage() {
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["desk"] }),
         qc.invalidateQueries({ queryKey: ["my-dashboard"] }),
-        qc.invalidateQueries({ queryKey: publicSnapshotQuery.queryKey }),
+        qc.invalidateQueries({ queryKey: SNAPSHOT_KEY }),
       ]);
       setUtr("");
       setNote("");

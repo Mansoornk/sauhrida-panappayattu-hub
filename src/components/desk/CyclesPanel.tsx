@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { deskDataQuery, publicSnapshotQuery, type PayattEvent } from "@/lib/queries";
+import { deskDataQuery, SNAPSHOT_KEY, type PayattEvent } from "@/lib/queries";
 import { useMonthEvents, useSnapshot } from "@/lib/use-payatt";
 import { useRole } from "@/lib/role-context";
 import { deleteEvent, saveContributionSheet, saveEvent, saveMonth } from "@/lib/payatt.functions";
@@ -127,7 +127,7 @@ function MonthDetails({ month }: { month: string }) {
     setBusy(true);
     try {
       await save({ data: { token, month, ...f } });
-      await qc.invalidateQueries({ queryKey: publicSnapshotQuery.queryKey });
+      await qc.invalidateQueries({ queryKey: SNAPSHOT_KEY });
       toast.success(`${formatMonth(month)} saved`);
     } catch (e) {
       toast.error(errMsg(e, "Could not save"));
@@ -239,7 +239,7 @@ function EventEditor({
           notes: f.notes || null,
         },
       });
-      await qc.invalidateQueries({ queryKey: publicSnapshotQuery.queryKey });
+      await qc.invalidateQueries({ queryKey: SNAPSHOT_KEY });
       toast.success(`${deskLabel(eventNo).en} saved`);
       onSaved?.();
     } catch (e) {
@@ -253,7 +253,7 @@ function EventEditor({
     if (!token || !event || !confirm(`Remove ${deskLabel(eventNo).en}?`)) return;
     try {
       await remove({ data: { token, id: event.id } });
-      await qc.invalidateQueries({ queryKey: publicSnapshotQuery.queryKey });
+      await qc.invalidateQueries({ queryKey: SNAPSHOT_KEY });
       toast.success(`${deskLabel(eventNo).en} removed`);
     } catch (e) {
       toast.error(errMsg(e, "Could not remove"));
@@ -390,7 +390,7 @@ function ContributionSheet({ event }: { event: PayattEvent }) {
       const res = await save({ data: { token, event_id: event.id, entries: changes } });
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["desk"] }),
-        qc.invalidateQueries({ queryKey: publicSnapshotQuery.queryKey }),
+        qc.invalidateQueries({ queryKey: SNAPSHOT_KEY }),
       ]);
       toast.success(`Saved ${res.saved} entr${res.saved === 1 ? "y" : "ies"}${res.removed ? `, removed ${res.removed}` : ""}`);
     } catch (e) {
