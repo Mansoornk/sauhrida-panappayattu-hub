@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ChangePasswordRouteImport } from './routes/change-password'
+import { Route as ConductorRouteImport } from './routes/conductor'
 import { Route as ContributeRouteImport } from './routes/contribute'
 import { Route as DeskRouteImport } from './routes/desk'
 import { Route as DrawRouteImport } from './routes/draw'
@@ -27,6 +28,11 @@ const IndexRoute = IndexRouteImport.update({
 const ChangePasswordRoute = ChangePasswordRouteImport.update({
   id: '/change-password',
   path: '/change-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConductorRoute = ConductorRouteImport.update({
+  id: '/conductor',
+  path: '/conductor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContributeRoute = ContributeRouteImport.update({
@@ -68,6 +74,7 @@ const ApiPublicJobsDrawAlertsRoute = ApiPublicJobsDrawAlertsRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/change-password': typeof ChangePasswordRoute
+  '/conductor': typeof ConductorRoute
   '/contribute': typeof ContributeRoute
   '/desk': typeof DeskRoute
   '/draw': typeof DrawRoute
@@ -79,6 +86,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/change-password': typeof ChangePasswordRoute
+  '/conductor': typeof ConductorRoute
   '/contribute': typeof ContributeRoute
   '/desk': typeof DeskRoute
   '/draw': typeof DrawRoute
@@ -91,6 +99,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/change-password': typeof ChangePasswordRoute
+  '/conductor': typeof ConductorRoute
   '/contribute': typeof ContributeRoute
   '/desk': typeof DeskRoute
   '/draw': typeof DrawRoute
@@ -104,6 +113,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/change-password'
+    | '/conductor'
     | '/contribute'
     | '/desk'
     | '/draw'
@@ -115,6 +125,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/change-password'
+    | '/conductor'
     | '/contribute'
     | '/desk'
     | '/draw'
@@ -126,6 +137,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/change-password'
+    | '/conductor'
     | '/contribute'
     | '/desk'
     | '/draw'
@@ -138,6 +150,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ChangePasswordRoute: typeof ChangePasswordRoute
+  ConductorRoute: typeof ConductorRoute
   ContributeRoute: typeof ContributeRoute
   DeskRoute: typeof DeskRoute
   DrawRoute: typeof DrawRoute
@@ -161,6 +174,13 @@ declare module '@tanstack/react-router' {
       path: '/change-password'
       fullPath: '/change-password'
       preLoaderRoute: typeof ChangePasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/conductor': {
+      id: '/conductor'
+      path: '/conductor'
+      fullPath: '/conductor'
+      preLoaderRoute: typeof ConductorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/contribute': {
@@ -218,6 +238,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ChangePasswordRoute: ChangePasswordRoute,
+  ConductorRoute: ConductorRoute,
   ContributeRoute: ContributeRoute,
   DeskRoute: DeskRoute,
   DrawRoute: DrawRoute,

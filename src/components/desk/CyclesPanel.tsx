@@ -16,6 +16,10 @@ import { useMonthEvents, useSnapshot } from "@/lib/use-payatt";
 import { useRole } from "@/lib/role-context";
 import { deleteEvent, saveContributionSheet, saveEvent, saveMonth } from "@/lib/payatt.functions";
 import {
+  addDays,
+  drawAtFromIST,
+  drawAtToIST,
+  formatDate,
   cycleMonthNumber,
   DEFAULT_TIME,
   DEFAULT_VENUE,
@@ -36,7 +40,7 @@ function errMsg(e: unknown, fallback: string) {
 }
 
 /** "Manage Past & Current Payattu Cycles": date/venue, each Payattu event, and member-wise entry sheets. */
-export function CyclesPanel({ month }: { month: string }) {
+export function CyclesPanel({ month, onAddMonth }: { month: string; onAddMonth?: () => void }) {
   const { months } = useSnapshot();
   const events = useMonthEvents(month);
   const monthRow = months.find((m) => m.month === month);
@@ -66,6 +70,11 @@ export function CyclesPanel({ month }: { month: string }) {
           {max === 1 ? "October has a single Payattu Desk." : "Up to two Payattu Desks, each Priority or Lottery."} Now:{" "}
           {describeMonthMode(events)}
         </p>
+        {onAddMonth && (
+          <Button variant="gold" size="sm" className="mt-3" onClick={onAddMonth}>
+            <Plus /> Add New Month / Cycle
+          </Button>
+        )}
       </div>
 
       <MonthDetails month={month} key={`${month}-${monthRow?.id ?? "new"}`} />
@@ -114,19 +123,24 @@ function MonthDetails({ month }: { month: string }) {
   const qc = useQueryClient();
   const save = useServerFn(saveMonth);
   const existing = months.find((m) => m.month === month);
+  const events = useMonthEvents(month);
+  const hasLottery = events.some((e) => e.selection_type === "lottery");
+  const savedDraw = existing?.draw_at ? drawAtToIST(existing.draw_at) : null;
   const [f, setF] = useState({
     payatt_date: existing?.payatt_date ?? `${month.slice(0, 7)}-28`,
     venue: existing?.venue ?? DEFAULT_VENUE,
     event_time: existing?.event_time ?? DEFAULT_TIME,
     wheel_override: existing?.wheel_override ?? false,
   });
+  const [draw, setDraw] = useState({ date: savedDraw?.date ?? "", time: savedDraw?.time ?? "15:45" });
   const [busy, setBusy] = useState(false);
 
   async function submit() {
     if (!token) return;
     setBusy(true);
     try {
-      await save({ data: { token, month, ...f } });
+      const draw_at = draw.date && draw.time ? drawAtFromIST(draw.date, draw.time) : null;
+      await save({ data: { token, month, ...f, draw_at } });
       await qc.invalidateQueries({ queryKey: SNAPSHOT_KEY });
       toast.success(`${formatMonth(month)} saved`);
     } catch (e) {
@@ -157,6 +171,36 @@ function MonthDetails({ month }: { month: string }) {
           <Label htmlFor="ptime">Time</Label>
           <Input id="ptime" value={f.event_time} onChange={(e) => setF({ ...f, event_time: e.target.value })} />
         </div>
+      </div>
+      <div className="space-y-2 rounded-xl border border-gold/50 bg-gold-soft p-3">
+        <p className="text-sm font-semibold text-accent-foreground">
+          Live lucky wheel draw · <span className="font-ml">നറുക്കെടുപ്പ് സമയം</span>
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {hasLottery
+            ? "Usually 2–3 days before the gathering. Members get a phone alert 1 minute before, and the wheel unlocks at this time."
+            : "Only needed when a desk this month is picked by lottery."}
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <Label htmlFor="ddate">Draw date</Label>
+            <Input id="ddate" type="date" value={draw.date} onChange={(e) => setDraw({ ...draw, date: e.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="dtime">Draw time (India)</Label>
+            <Input id="dtime" type="time" value={draw.time} onChange={(e) => setDraw({ ...draw, time: e.target.value })} />
+          </div>
+        </div>
+        {!draw.date && f.payatt_date && hasLottery && (
+          <Button size="sm" variant="outline" onClick={() => setDraw({ ...draw, date: addDays(f.payatt_date, -2) })}>
+            Use {formatDate(addDays(f.payatt_date, -2))}
+          </Button>
+        )}
+        {draw.date && (
+          <Button size="sm" variant="ghost" onClick={() => setDraw({ ...draw, date: "" })}>
+            Clear draw time
+          </Button>
+        )}
       </div>
       <div className="flex items-center justify-between rounded-xl bg-muted p-3">
         <div>

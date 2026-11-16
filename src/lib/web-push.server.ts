@@ -142,6 +142,6 @@ export async function sendPush(
     headers["Content-Encoding"] = "aes128gcm";
     headers["Content-Type"] = "application/octet-stream";
   }
-  const res = await fetch(sub.endpoint, { method: "POST", headers, body: body as BodyInit | undefined });
+  const res = await fetch(sub.endpoint, { method: "POST", headers, body: (body ?? null) as BodyInit | null });
   return res.status;
 }

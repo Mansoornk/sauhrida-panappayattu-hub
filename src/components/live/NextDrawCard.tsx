@@ -58,6 +58,11 @@ export function NextDrawCard() {
           {live.target ? deskLabel(live.target.event_no).en : ""}!
         </p>
       )}
+      {live.phase === "intermission" && (
+        <p className="mt-3 rounded-2xl bg-gold-soft p-3 text-sm font-semibold text-accent-foreground">
+          Spin 1 is done — Spin 2 unlocks in {formatCountdown(live.gapLeft)}
+        </p>
+      )}
       {live.phase === "spinning" && (
         <p className="font-ml mt-3 rounded-2xl bg-gold-soft p-3 text-sm font-semibold text-accent-foreground">
           ചക്രം കറക്കിയത്: {spinningBy}... ഫലത്തിനായി കാത്തിരിക്കുന്നു!

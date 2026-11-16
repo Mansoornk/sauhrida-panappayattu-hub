@@ -35,15 +35,30 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { deskDataQuery, SNAPSHOT_KEY, type DeskContribution, type Member } from "@/lib/queries";
 import { useActiveMonth, useCycleMonthOptions, useMemberMap, useSnapshot } from "@/lib/use-payatt";
 import { useRole } from "@/lib/role-context";
-import { changePin, publishLedger, reviewContribution, updateMember } from "@/lib/payatt.functions";
-import { deskLabel, formatINR, formatMonth, SELECTION_LABELS, toCsvWithBom, todayIST, type SelectionType } from "@/lib/payatt-rules";
+import { addMember, changePin, publishLedger, removeMember, reviewContribution, updateMember } from "@/lib/payatt.functions";
+import {
+  buildLoginShareText,
+  CYCLE_START_MONTH,
+  cycleMonthNumber,
+  deskLabel,
+  formatINR,
+  formatMonth,
+  freeSlots,
+  nextCycleMonth,
+  passwordProblem,
+  SELECTION_LABELS,
+  suggestUsername,
+  toCsvWithBom,
+  todayIST,
+  type SelectionType,
+} from "@/lib/payatt-rules";
 
 export const Route = createFileRoute("/desk")({
   head: () => ({
     meta: [
-      { title: "Conductor & Admin Desk · Sauhrida Panappayattu" },
-      { name: "description", content: "PIN-protected desk to verify contributions and publish the monthly ledger." },
-      { property: "og:title", content: "Conductor & Admin Desk" },
+      { title: "Admin Desk · സൗഹൃദ പണപ്പയറ്റ്" },
+      { name: "description", content: "PIN-protected Admin desk to verify contributions, manage cycles and publish the ledger." },
+      { property: "og:title", content: "Admin Desk · സൗഹൃദ പണപ്പയറ്റ്" },
       { property: "og:description", content: "Verify, review and publish the Panappayattu ledger." },
       { name: "robots", content: "noindex" },
     ],
@@ -57,80 +72,146 @@ function DeskPage() {
   const { monthKey } = useActiveMonth();
   const cycleOptions = useCycleMonthOptions();
   const [month, setMonth] = useState(monthKey);
-  const monthOptions = Array.from(new Set([monthKey, ...cycleOptions])).sort().reverse();
+  const [extraMonths, setExtraMonths] = useState<string[]>([]);
+  const [addOpen, setAddOpen] = useState(false);
+  const monthOptions = Array.from(new Set([monthKey, ...cycleOptions, ...extraMonths])).sort().reverse();
+
+  function addMonth(m: string) {
+    setExtraMonths((xs) => (xs.includes(m) ? xs : [...xs, m]));
+    setMonth(m);
+    setAddOpen(false);
+  }
 
   if (!ready) return null;
-  if (role === "member" || !token) {
+  if (role !== "admin" || !token) {
     return (
       <div className="mx-auto max-w-md rounded-3xl border bg-card p-8 text-center shadow-card">
         <Lock className="mx-auto size-10 text-gold" />
-        <h1 className="mt-3 text-xl font-bold text-primary">Conductor &amp; Admin Desk</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Unlock with your Conductor or Admin PIN.</p>
+        <h1 className="mt-3 text-xl font-bold text-primary">Admin Desk</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Unlock with the Admin PIN.</p>
         <Button variant="gold" size="xl" className="mt-5" onClick={() => setLoginOpen(true)}>
           Unlock desk
         </Button>
-        <StaffLoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
+        <StaffLoginDialog open={loginOpen} onOpenChange={setLoginOpen} initial="admin" />
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <PageTitle
-        en={role === "admin" ? "Admin Mode" : "Conductor Desk"}
-        ml={role === "admin" ? "അഡ്മിൻ ഡെസ്ക്" : "നടത്തിപ്പുകാരുടെ ഡെസ്ക്"}
-      >
-        <select
-          value={month}
-          onChange={(e) => setMonth(e.target.value)}
-          className="h-10 rounded-md border border-input bg-card px-3 text-sm font-medium"
-          aria-label="Month"
-        >
-          {monthOptions.map((m) => (
-            <option key={m} value={m}>
-              {formatMonth(m)}
-            </option>
-          ))}
-        </select>
+      <PageTitle en="Admin Mode" ml="അഡ്മിൻ ഡെസ്ക്">
+        <div className="flex items-center gap-2">
+          <select
+            value={month}
+            onChange={(e) => (e.target.value === "__add" ? setAddOpen(true) : setMonth(e.target.value))}
+            className="h-10 rounded-md border border-input bg-card px-3 text-sm font-medium"
+            aria-label="Month"
+          >
+            {monthOptions.map((m) => (
+              <option key={m} value={m}>
+                Month {cycleMonthNumber(m)} · {formatMonth(m)}
+              </option>
+            ))}
+            <option value="__add">+ Add New Month / Cycle</option>
+          </select>
+        </div>
       </PageTitle>
+      <AddMonthDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        suggested={nextCycleMonth(monthOptions)}
+        existing={monthOptions}
+        onAdd={addMonth}
+      />
 
-      {role === "admin" ? (
-        <Tabs defaultValue="review">
-          <TabsList className="mb-3 flex w-full justify-start overflow-x-auto">
-            <TabsTrigger value="review">Review</TabsTrigger>
-            <TabsTrigger value="cycles">Cycles</TabsTrigger>
-            <TabsTrigger value="logins">Logins</TabsTrigger>
-            <TabsTrigger value="requests">Requests</TabsTrigger>
-            <TabsTrigger value="members">Members</TabsTrigger>
-            <TabsTrigger value="exports">Exports</TabsTrigger>
-            <TabsTrigger value="pins">PINs</TabsTrigger>
-          </TabsList>
-          <TabsContent value="review">
-            <ReviewPanel month={month} />
-          </TabsContent>
-          <TabsContent value="cycles">
-            <CyclesPanel month={month} />
-          </TabsContent>
-          <TabsContent value="logins">
-            <LoginsPanel />
-          </TabsContent>
-          <TabsContent value="requests">
-            <RequestsPanel />
-          </TabsContent>
-          <TabsContent value="members">
-            <MembersPanel />
-          </TabsContent>
-          <TabsContent value="exports">
-            <ExportsPanel month={month} />
-          </TabsContent>
-          <TabsContent value="pins">
-            <PinsPanel />
-          </TabsContent>
-        </Tabs>
-      ) : (
-        <ReviewPanel month={month} />
-      )}
+      <Tabs defaultValue="review">
+        <TabsList className="mb-3 flex w-full justify-start overflow-x-auto">
+          <TabsTrigger value="review">Review</TabsTrigger>
+          <TabsTrigger value="cycles">Cycles</TabsTrigger>
+          <TabsTrigger value="logins">Logins</TabsTrigger>
+          <TabsTrigger value="requests">Requests</TabsTrigger>
+          <TabsTrigger value="members">Members</TabsTrigger>
+          <TabsTrigger value="exports">Exports</TabsTrigger>
+          <TabsTrigger value="pins">PIN</TabsTrigger>
+        </TabsList>
+        <TabsContent value="review">
+          <ReviewPanel month={month} />
+        </TabsContent>
+        <TabsContent value="cycles">
+          <CyclesPanel month={month} onAddMonth={() => setAddOpen(true)} />
+        </TabsContent>
+        <TabsContent value="logins">
+          <LoginsPanel />
+        </TabsContent>
+        <TabsContent value="requests">
+          <RequestsPanel />
+        </TabsContent>
+        <TabsContent value="members">
+          <MembersPanel />
+        </TabsContent>
+        <TabsContent value="exports">
+          <ExportsPanel month={month} />
+        </TabsContent>
+        <TabsContent value="pins">
+          <PinsPanel />
+        </TabsContent>
+      </Tabs>
     </div>
+  );
+}
+
+/** Pick any month and year for a new Payattu cycle (saved once its date is set in Cycles). */
+function AddMonthDialog({
+  open,
+  onOpenChange,
+  suggested,
+  existing,
+  onAdd,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  suggested: string;
+  existing: string[];
+  onAdd: (month: string) => void;
+}) {
+  const [value, setValue] = useState(suggested.slice(0, 7));
+  useEffect(() => {
+    if (open) setValue(suggested.slice(0, 7));
+  }, [open, suggested]);
+  const month = `${value}-01`;
+  const valid = /^\d{4}-\d{2}$/.test(value) && month >= CYCLE_START_MONTH;
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Add New Month / Cycle</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="new-month">Month and year</Label>
+            <Input
+              id="new-month"
+              type="month"
+              min={CYCLE_START_MONTH.slice(0, 7)}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+            />
+          </div>
+          {valid && (
+            <p className="rounded-xl bg-gold-soft p-3 text-sm text-accent-foreground">
+              <span className="font-semibold">Month {cycleMonthNumber(month)}</span> · {formatMonth(month)}
+              {existing.includes(month) ? " — already in the list" : ""}
+            </p>
+          )}
+          <Button variant="gold" className="w-full" disabled={!valid} onClick={() => onAdd(month)}>
+            <Plus /> {existing.includes(month) ? "Open this month" : "Add month"}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Then set its date in the Cycles tab. Time and venue start as 03:45 PM at the Sir Syed College Cafeteria.
+          </p>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -345,41 +426,229 @@ function MiniStat({
   );
 }
 
-/* ---------------- Members ---------------- */
+/* ---------------- Members (36-slot roster) ---------------- */
+
+type NewLogin = { name: string; username: string; temp_password: string };
 
 function MembersPanel() {
   const { members } = useSnapshot();
+  const { token } = useRole();
+  const qc = useQueryClient();
+  const remove = useServerFn(removeMember);
   const [editing, setEditing] = useState<Member | null>(null);
+  const [adding, setAdding] = useState<number | null>(null);
+  const [issued, setIssued] = useState<NewLogin | null>(null);
+  const bySlot = new Map(members.map((m) => [m.slot_no, m]));
+  const free = freeSlots(members.map((m) => m.slot_no));
+
+  async function onRemove(m: Member) {
+    if (!token) return;
+    if (!confirm(`Remove ${m.name} from slot ${m.slot_no}? Their past payments stay in the ledgers, and their login stops working.`))
+      return;
+    try {
+      await remove({ data: { token, id: m.id } });
+      await qc.invalidateQueries({ queryKey: SNAPSHOT_KEY });
+      await qc.invalidateQueries({ queryKey: ["member-accounts"] });
+      toast.success(`Slot ${m.slot_no} is now free`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not remove");
+    }
+  }
+
   return (
-    <div className="rounded-3xl border bg-card p-3 shadow-card">
-      <ul className="divide-y">
-        {members.map((m) => (
-          <li key={m.id} className="flex items-center gap-3 px-2 py-2">
-            <span className="w-6 text-xs font-bold text-muted-foreground">{m.slot_no}</span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{m.name}</p>
-              <p className="truncate text-xs text-muted-foreground">{m.department}</p>
-            </div>
-            {m.has_conducted && <Badge variant="gold">Conducted</Badge>}
-            <Button size="icon" variant="ghost" onClick={() => setEditing(m)} aria-label={`Edit ${m.name}`}>
-              <Pencil />
-            </Button>
-          </li>
-        ))}
-      </ul>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-muted p-3 text-sm">
+        <span>
+          <span className="font-semibold">{members.length}</span> of 36 slots filled
+          {free.length > 0 && <span className="text-muted-foreground"> · free: {free.join(", ")}</span>}
+        </span>
+        {free.length > 0 && (
+          <Button size="sm" variant="gold" onClick={() => setAdding(free[0]!)}>
+            <Plus /> Add member
+          </Button>
+        )}
+      </div>
+      <div className="rounded-3xl border bg-card p-3 shadow-card">
+        <ul className="divide-y">
+          {Array.from({ length: 36 }, (_, i) => i + 1).map((slot) => {
+            const m = bySlot.get(slot);
+            if (!m)
+              return (
+                <li key={`free-${slot}`} className="flex items-center gap-3 px-2 py-2">
+                  <span className="w-6 text-xs font-bold text-muted-foreground">{slot}</span>
+                  <p className="flex-1 text-sm italic text-muted-foreground">Empty slot</p>
+                  <Button size="sm" variant="outline" onClick={() => setAdding(slot)}>
+                    <Plus /> Add here
+                  </Button>
+                </li>
+              );
+            return (
+              <li key={m.id} className="flex items-center gap-2 px-2 py-2">
+                <span className="w-6 text-xs font-bold text-muted-foreground">{slot}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{m.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{m.department}</p>
+                </div>
+                {m.has_conducted && <Badge variant="gold">Conducted</Badge>}
+                <Button size="icon" variant="ghost" onClick={() => setEditing(m)} aria-label={`Edit ${m.name}`}>
+                  <Pencil />
+                </Button>
+                <Button size="icon" variant="ghost" onClick={() => onRemove(m)} aria-label={`Remove ${m.name}`}>
+                  <Trash2 />
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit slot {editing?.slot_no}</DialogTitle>
           </DialogHeader>
-          {editing && <MemberForm key={editing.id} member={editing} onDone={() => setEditing(null)} />}
+          {editing && <MemberForm key={editing.id} member={editing} free={free} onDone={() => setEditing(null)} />}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={adding !== null} onOpenChange={(o) => !o && setAdding(null)}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add a member</DialogTitle>
+          </DialogHeader>
+          {adding !== null && (
+            <AddMemberForm
+              key={adding}
+              slot={adding}
+              free={free}
+              onDone={(login) => {
+                setAdding(null);
+                setIssued(login);
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!issued} onOpenChange={(o) => !o && setIssued(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Login details for {issued?.name}</DialogTitle>
+          </DialogHeader>
+          {issued && <IssuedLogin login={issued} />}
         </DialogContent>
       </Dialog>
     </div>
   );
 }
 
-function MemberForm({ member, onDone }: { member: Member; onDone: () => void }) {
+function IssuedLogin({ login }: { login: NewLogin }) {
+  const text = buildLoginShareText({
+    name: login.name,
+    username: login.username,
+    tempPassword: login.temp_password,
+    link: `${window.location.origin}/passbook`,
+  });
+  return (
+    <div className="space-y-3">
+      <pre className="font-ml whitespace-pre-wrap rounded-xl bg-muted p-3 text-sm">{text}</pre>
+      <div className="flex gap-2">
+        <Button asChild variant="gold" className="flex-1">
+          <a href={`https://wa.me/?text=${encodeURIComponent(text)}`} target="_blank" rel="noreferrer">
+            <Send /> Share on WhatsApp
+          </a>
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => navigator.clipboard.writeText(text).then(() => toast.success("Copied"))}
+        >
+          Copy
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">The member chooses their own password on first sign-in.</p>
+    </div>
+  );
+}
+
+function AddMemberForm({ slot, free, onDone }: { slot: number; free: number[]; onDone: (l: NewLogin) => void }) {
+  const { token } = useRole();
+  const qc = useQueryClient();
+  const add = useServerFn(addMember);
+  const [f, setF] = useState({ slot_no: slot, name: "", department: "", phone: "", username: "", temp_password: "" });
+  const [userTouched, setUserTouched] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const username = userTouched ? f.username : f.name ? suggestUsername(f.name, f.slot_no) : "";
+  const pwProblem = f.temp_password ? passwordProblem(f.temp_password) : null;
+  const ok = f.name.trim().length >= 2 && f.department.trim().length >= 2 && username.length >= 3 && !!f.temp_password && !pwProblem;
+
+  async function submit() {
+    if (!token) return;
+    setBusy(true);
+    try {
+      const res = await add({ data: { token, ...f, username, phone: f.phone || null } });
+      await qc.invalidateQueries({ queryKey: SNAPSHOT_KEY });
+      await qc.invalidateQueries({ queryKey: ["member-accounts"] });
+      toast.success(`${res.name} added to slot ${f.slot_no}`);
+      onDone({ name: res.name, username: res.username, temp_password: res.temp_password });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not add");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <Label htmlFor="a-slot">Slot</Label>
+        <select
+          id="a-slot"
+          value={f.slot_no}
+          onChange={(e) => setF({ ...f, slot_no: Number(e.target.value) })}
+          className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
+        >
+          {free.map((s) => (
+            <option key={s} value={s}>
+              Slot {s}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="a-name">Name</Label>
+        <Input id="a-name" value={f.name} placeholder="Dr. …" onChange={(e) => setF({ ...f, name: e.target.value })} />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="a-dept">Department</Label>
+        <Input id="a-dept" value={f.department} placeholder="e.g. Physics" onChange={(e) => setF({ ...f, department: e.target.value })} />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="a-phone">Phone</Label>
+        <Input id="a-phone" inputMode="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="a-user">Username</Label>
+          <Input
+            id="a-user"
+            value={username}
+            onChange={(e) => {
+              setUserTouched(true);
+              setF({ ...f, username: e.target.value.toLowerCase().replace(/[^a-z0-9._]/g, "") });
+            }}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="a-pass">Temporary password</Label>
+          <Input id="a-pass" value={f.temp_password} onChange={(e) => setF({ ...f, temp_password: e.target.value })} />
+          {pwProblem && <p className="text-xs text-destructive">{pwProblem}</p>}
+        </div>
+      </div>
+      <Button className="w-full" variant="gold" onClick={submit} disabled={busy || !ok}>
+        {busy ? <Loader2 className="animate-spin" /> : <Plus />} Add to slot {f.slot_no}
+      </Button>
+    </div>
+  );
+}
+
+function MemberForm({ member, free, onDone }: { member: Member; free: number[]; onDone: () => void }) {
   const { token } = useRole();
   const qc = useQueryClient();
   const update = useServerFn(updateMember);
@@ -387,6 +656,7 @@ function MemberForm({ member, onDone }: { member: Member; onDone: () => void }) 
     name: member.name,
     department: member.department,
     phone: "",
+    slot_no: member.slot_no,
     has_conducted: member.has_conducted,
   });
   const [busy, setBusy] = useState(false);
@@ -394,7 +664,17 @@ function MemberForm({ member, onDone }: { member: Member; onDone: () => void }) 
     if (!token) return;
     setBusy(true);
     try {
-      await update({ data: { token, id: member.id, ...f } });
+      await update({
+        data: {
+          token,
+          id: member.id,
+          name: f.name,
+          department: f.department,
+          has_conducted: f.has_conducted,
+          phone: f.phone || null,
+          ...(f.slot_no !== member.slot_no ? { slot_no: f.slot_no } : {}),
+        },
+      });
       await qc.invalidateQueries({ queryKey: SNAPSHOT_KEY });
       toast.success("Member updated");
       onDone();
@@ -407,12 +687,31 @@ function MemberForm({ member, onDone }: { member: Member; onDone: () => void }) 
   return (
     <div className="space-y-3">
       <div className="space-y-1.5">
+        <Label htmlFor="m-slot">Slot</Label>
+        <select
+          id="m-slot"
+          value={f.slot_no}
+          onChange={(e) => setF({ ...f, slot_no: Number(e.target.value) })}
+          className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
+        >
+          {[member.slot_no, ...free].sort((a, b) => a - b).map((s) => (
+            <option key={s} value={s}>
+              Slot {s}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="space-y-1.5">
         <Label htmlFor="m-name">Name</Label>
         <Input id="m-name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="m-dept">Department</Label>
         <Input id="m-dept" value={f.department} onChange={(e) => setF({ ...f, department: e.target.value })} />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="m-phone">New phone number (leave empty to keep the current one)</Label>
+        <Input id="m-phone" inputMode="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
       </div>
       <div className="flex items-center justify-between rounded-xl bg-muted p-3">
         <span className="text-sm">Already conducted a Payatt</span>
@@ -515,41 +814,40 @@ function ExportsPanel({ month }: { month: string }) {
   );
 }
 
-/* ---------------- PINs ---------------- */
+/* ---------------- Admin PIN ---------------- */
 
 function PinsPanel() {
   const { token } = useRole();
   const change = useServerFn(changePin);
-  const [pins, setPins] = useState({ admin: "", conductor: "" });
-  async function submit(role: "admin" | "conductor") {
+  const [pin, setPin] = useState("");
+  async function submit() {
     if (!token) return;
     try {
-      await change({ data: { token, role, pin: pins[role] } });
-      toast.success(`${role === "admin" ? "Admin" : "Conductor"} PIN changed`);
-      setPins({ ...pins, [role]: "" });
+      await change({ data: { token, role: "admin", pin } });
+      toast.success("Admin PIN changed");
+      setPin("");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not change PIN");
     }
   }
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {(["conductor", "admin"] as const).map((r) => (
-        <div key={r} className="space-y-3 rounded-3xl border bg-card p-5 shadow-card">
-          <KeyRound className="size-6 text-gold" />
-          <h3 className="font-semibold text-primary">{r === "admin" ? "Admin PIN" : "Conductor PIN"}</h3>
-          <Input
-            inputMode="numeric"
-            type="password"
-            maxLength={8}
-            placeholder="New 4–8 digit PIN"
-            value={pins[r]}
-            onChange={(e) => setPins({ ...pins, [r]: e.target.value.replace(/\D/g, "") })}
-          />
-          <Button className="w-full" disabled={pins[r].length < 4} onClick={() => submit(r)}>
-            Update PIN
-          </Button>
-        </div>
-      ))}
+    <div className="max-w-sm space-y-3 rounded-3xl border bg-card p-5 shadow-card">
+      <KeyRound className="size-6 text-gold" />
+      <h3 className="font-semibold text-primary">Admin PIN</h3>
+      <p className="text-xs text-muted-foreground">
+        Conductors don't use a PIN any more: each desk's recipient runs their own desk after signing in as a member.
+      </p>
+      <Input
+        inputMode="numeric"
+        type="password"
+        maxLength={8}
+        placeholder="New 4–8 digit PIN"
+        value={pin}
+        onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+      />
+      <Button className="w-full" disabled={pin.length < 4} onClick={submit}>
+        Update PIN
+      </Button>
     </div>
   );
 }

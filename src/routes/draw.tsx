@@ -1,229 +1,290 @@
-import { useMemo, useRef, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Ban, Crown, Lock, PartyPopper, ShieldCheck, Unlock } from "lucide-react";
+import { Crown, Disc3, Hourglass, Loader2, Lock, PartyPopper, Radio, Send, Timer } from "lucide-react";
 import { PageTitle } from "@/components/AppShell";
 import { SpinWheel, type SpinWheelHandle } from "@/components/SpinWheel";
+import { DrawAlertsCard } from "@/components/live/DrawAlertsToggle";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
-import { deskDataQuery, SNAPSHOT_KEY } from "@/lib/queries";
-import { useActiveMonth, useMemberMap, useMonthEvents, useSnapshot } from "@/lib/use-payatt";
+import { SNAPSHOT_KEY, type LiveDraw } from "@/lib/queries";
+import { useMemberMap, useSnapshot } from "@/lib/use-payatt";
+import { useLiveDraw } from "@/lib/live-draw";
 import { useRole } from "@/lib/role-context";
-import { confirmLotteryWinner, saveMonth } from "@/lib/payatt.functions";
-import {
-  canSpinWheel,
-  deskLabel,
-  eventsNeedingDraw,
-  wheelWindow,
-  formatDate,
-  formatMonth,
-  wheelCandidates,
-} from "@/lib/payatt-rules";
+import { getLiveRoster, saveMonth, startLiveSpin } from "@/lib/payatt.functions";
+import { deskLabel, formatCountdown, formatDrawAt, formatMonth } from "@/lib/payatt-rules";
 
 export const Route = createFileRoute("/draw")({
   head: () => ({
     meta: [
-      { title: "Lottery Draw · Sauhrida Panappayattu" },
+      { title: "Live Wheel Arena · സൗഹൃദ പണപ്പയറ്റ്" },
       {
         name: "description",
-        content: "Admin-run spinning wheel that picks the Lottery Payattu Desk recipient from eligible verified members.",
+        content: "Live lucky wheel draw for the Lottery Payattu Desks: the first member to spin locks the wheel for everyone.",
       },
-      { property: "og:title", content: "Payattu Lottery Wheel — നറുക്കെടുപ്പ്" },
-      { property: "og:description", content: "Opens 2–3 days before the Payattu, run by the Admin." },
+      { property: "og:title", content: "Live Wheel Arena · ഭാഗ്യചക്രം" },
+      { property: "og:description", content: "Join the live lucky wheel draw of the Sauhrida Panappayattu." },
+      { name: "robots", content: "noindex" },
     ],
   }),
   component: DrawPage,
 });
 
+async function burstConfetti() {
+  const confetti = (await import("canvas-confetti")).default;
+  const colors = ["#d4af37", "#f5e6b3", "#065f46", "#fdfbf7"];
+  confetti({ particleCount: 140, spread: 80, origin: { y: 0.55 }, colors });
+  setTimeout(() => confetti({ particleCount: 90, angle: 60, spread: 70, origin: { x: 0 }, colors }), 250);
+  setTimeout(() => confetti({ particleCount: 90, angle: 120, spread: 70, origin: { x: 1 }, colors }), 400);
+}
+
 function DrawPage() {
-  const { members, contributions } = useSnapshot();
-  const { month, monthKey, today } = useActiveMonth();
-  const monthEvents = useMonthEvents(monthKey);
+  const snap = useSnapshot();
+  const live = useLiveDraw(snap);
   const memberMap = useMemberMap();
-  const { role, token } = useRole();
+  const { role, token, member, viewerToken } = useRole();
   const qc = useQueryClient();
-  const desk = useQuery({ ...deskDataQuery(token, monthKey), enabled: role === "admin" && !!token });
-  const confirm = useServerFn(confirmLotteryWinner);
+  const spin = useServerFn(startLiveSpin);
   const save = useServerFn(saveMonth);
   const wheelRef = useRef<SpinWheelHandle>(null);
-  const [spinning, setSpinning] = useState(false);
-  const [winner, setWinner] = useState<{ id: string; label: string } | null>(null);
+  const animated = useRef<string | null>(null);
+  const [animDraw, setAnimDraw] = useState<LiveDraw | null>(null);
+  const [result, setResult] = useState<{ name: string; desk: number } | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const lotteryEvents = monthEvents.filter((e) => e.selection_type === "lottery");
-  const pending = eventsNeedingDraw(monthEvents);
-  const target = pending[0] ?? null;
+  // Members spin under their own name; the Admin spins as "Admin".
+  const spinToken = member && !member.mustChange ? member.token : role === "admin" ? token : null;
+  const monthKey = live?.month.month ?? null;
 
-  // Admin sees verified entries including unpublished drafts; members see published ones.
-  const verifiedSource = role === "admin" && desk.data ? desk.data.allVerified : contributions;
-  const recipientIds = monthEvents.map((e) => e.recipient_member_id);
-  const candidates = useMemo(
-    () => wheelCandidates(members, verifiedSource, recipientIds),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [members, verifiedSource, recipientIds.join(",")],
+  const roster = useQuery({
+    queryKey: ["live-roster", monthKey, live?.draws.length ?? 0, snap.events.length],
+    queryFn: () => getLiveRoster({ data: { token: viewerToken!, month: monthKey! } }),
+    enabled: !!monthKey && !!viewerToken,
+  });
+
+  const entries = useMemo(
+    () =>
+      animDraw
+        ? animDraw.candidate_names.map((label, i) => ({ id: animDraw.candidate_ids[i] ?? String(i), label }))
+        : (roster.data ?? []),
+    [animDraw, roster.data],
   );
-  const entries = candidates.map((m) => ({ id: m.id, label: m.name }));
-  const override = month?.wheel_override ?? false;
-  const canSpin = !!target && canSpinWheel({ role, today, payattDate: month?.payatt_date, override });
-  const win = month ? wheelWindow(month.payatt_date) : null;
 
-  async function toggleOverride(v: boolean) {
-    if (!month || !token) return;
-    try {
-      await save({
-        data: { token, month: month.month, payatt_date: month.payatt_date, venue: month.venue, wheel_override: v },
-      });
-      await qc.invalidateQueries({ queryKey: SNAPSHOT_KEY });
-      toast.success(v ? "Test override ON — wheel unlocked" : "Override OFF — wheel follows the date lock");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not update");
+  // Someone (maybe on another phone) claimed the spin: play the same spin here.
+  const spinningDraw = live?.spinning ?? null;
+  useEffect(() => {
+    if (spinningDraw && animated.current !== spinningDraw.id) {
+      animated.current = spinningDraw.id;
+      setResult(null);
+      setAnimDraw(spinningDraw);
     }
-  }
+  }, [spinningDraw]);
 
-  async function confirmWinner() {
-    if (!winner || !token || !target) return;
+  // Once the wheel shows that draw's names, animate it to land exactly when the server says.
+  useEffect(() => {
+    if (!animDraw) return;
+    const end = new Date(animDraw.started_at).getTime() + animDraw.duration_ms;
+    const remaining = end - (Date.now() + snap.clockOffset);
+    const duration = Math.max(600, remaining);
+    const turns = Math.max(1, Math.round((7 * duration) / animDraw.duration_ms));
+    const t = setTimeout(() => wheelRef.current?.spinTo(animDraw.winner_index, duration, turns), 30);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [animDraw?.id]);
+
+  const onResult = useCallback(
+    (e: { id: string; label: string }) => {
+      if (animDraw) setResult({ name: e.label, desk: animDraw.event_no });
+      void burstConfetti();
+      void qc.invalidateQueries({ queryKey: SNAPSHOT_KEY });
+      setTimeout(() => setAnimDraw(null), 6000);
+    },
+    [animDraw, qc],
+  );
+
+  async function onSpin() {
+    if (!live?.target || !spinToken) return;
     setBusy(true);
     try {
-      await confirm({ data: { token, event_id: target.id, member_id: winner.id } });
+      const res = await spin({ data: { token: spinToken, event_id: live.target.id } });
+      if (!res.ok) {
+        toast.error(res.error);
+      } else {
+        animated.current = res.draw.id;
+        setResult(null);
+        setAnimDraw(res.draw);
+      }
       await qc.invalidateQueries({ queryKey: SNAPSHOT_KEY });
-      toast.success(`${winner.label} is ${deskLabel(target.event_no).en} for ${formatMonth(monthKey)}`);
-      setWinner(null);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not confirm");
+      toast.error(e instanceof Error ? e.message : "Could not spin");
     } finally {
       setBusy(false);
     }
   }
 
-  const winners = lotteryEvents.filter((e) => e.recipient_member_id);
+  async function setOverride(v: boolean) {
+    if (!token || !live) return;
+    const m = live.month;
+    try {
+      await save({
+        data: { token, month: m.month, payatt_date: m.payatt_date, venue: m.venue, event_time: m.event_time, wheel_override: v },
+      });
+      await qc.invalidateQueries({ queryKey: SNAPSHOT_KEY });
+      toast.success(v ? "Wheel opened for testing" : "Wheel back on its schedule");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not change");
+    }
+  }
+
+  if (!live || live.phase === "none") {
+    return (
+      <div className="space-y-4">
+        <PageTitle en="Live Wheel Arena" ml="ഭാഗ്യചക്ര നറുക്കെടുപ്പ്" />
+        <div className="rounded-3xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
+          <Disc3 className="mx-auto mb-2 size-10 text-gold" />
+          No Payattu Desk is waiting for a lottery draw right now.
+        </div>
+        <DrawAlertsCard />
+      </div>
+    );
+  }
+
+  const lotteryEvents = live.events.filter((e) => e.selection_type === "lottery");
+  const watching = !!animDraw;
+  const canSpin = live.phase === "open" && !!spinToken && !watching && !busy;
+  const spinNo = live.target ? lotteryEvents.findIndex((e) => e.id === live.target!.id) + 1 : 0;
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <PageTitle en="Lottery Draw" ml="നറുക്കെടുപ്പ് ചക്രം">
-        <Badge variant={canSpin ? "success" : "warning"} className="gap-1">
-          {canSpin ? <Unlock className="size-3" /> : <Lock className="size-3" />}
-          {canSpin ? "Unlocked" : "Locked"}
+    <div className="space-y-4">
+      <PageTitle en="Live Wheel Arena" ml="ഭാഗ്യചക്ര നറുക്കെടുപ്പ്">
+        <Badge variant={live.phase === "open" || watching ? "gold" : "outline"} className="gap-1">
+          {live.phase === "open" || watching ? <Radio className="size-3 animate-pulse" /> : <Lock className="size-3" />}
+          {watching ? "Spinning" : live.phase === "open" ? "Live now" : live.phase === "done" ? "Finished" : "Locked"}
         </Badge>
       </PageTitle>
 
-      {winners.map((e) => (
-        <div key={e.id} className="mb-3 flex items-center gap-3 rounded-2xl border border-gold/50 bg-gold-soft p-4">
-          <Crown className="size-6 text-gold" />
+      <section className="rounded-3xl bg-emerald-gradient p-5 text-center text-primary-foreground shadow-card">
+        <p className="text-xs uppercase tracking-[0.2em] text-gold-soft">{formatMonth(live.month.month)}</p>
+        <p className="mt-1 text-sm">
+          {lotteryEvents.length === 2
+            ? "Two lottery desks: Spin 1 picks Desk 1, then Spin 2 picks Desk 2 from the rest."
+            : `${deskLabel(lotteryEvents[0]!.event_no).en} is picked by the lucky wheel.`}
+        </p>
+        {(live.phase === "countdown" || live.phase === "alert") && live.month.draw_at && (
+          <>
+            <p className="font-ml mt-3 text-sm text-gold-soft">അടുത്ത നറുക്കെടുപ്പ് സമയം · {formatDrawAt(live.month.draw_at)}</p>
+            <p className="mt-1 flex items-center justify-center gap-2 font-mono text-4xl font-extrabold tabular-nums">
+              <Timer className="size-7 text-gold-soft" /> {formatCountdown(live.msLeft)}
+            </p>
+            <p className="mt-1 text-xs text-primary-foreground/75">The spin button unlocks for everyone at zero.</p>
+          </>
+        )}
+        {live.phase === "unscheduled" && (
+          <p className="mt-3 text-sm text-gold-soft">The Admin will announce the draw date &amp; time soon.</p>
+        )}
+        {live.phase === "intermission" && !watching && (
+          <p className="mt-3 flex items-center justify-center gap-2 text-lg font-bold">
+            <Hourglass className="size-5 text-gold-soft" /> Spin 2 unlocks in {formatCountdown(live.gapLeft)}
+          </p>
+        )}
+      </section>
+
+      <div className="relative flex flex-col items-center rounded-3xl border-2 border-gold/60 bg-card p-4 shadow-gold">
+        {watching && animDraw && (
+          <p className="font-ml mb-3 w-full rounded-2xl bg-gold-soft p-3 text-center text-sm font-bold text-accent-foreground">
+            ചക്രം കറക്കിയത്: {animDraw.spun_by_name}... ഫലത്തിനായി കാത്തിരിക്കുന്നു!
+            <span className="block font-sans text-xs font-medium text-muted-foreground">
+              {deskLabel(animDraw.event_no).en} — the same spin is playing on every phone
+            </span>
+          </p>
+        )}
+        {entries.length === 0 && roster.isLoading ? (
+          <Loader2 className="my-20 size-8 animate-spin text-gold" />
+        ) : (
+          <SpinWheel ref={wheelRef} entries={entries} onResult={onResult} />
+        )}
+        {!watching && live.phase !== "done" && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {entries.length} eligible member{entries.length === 1 ? "" : "s"} on the wheel
+          </p>
+        )}
+
+        {result && (
+          <div className="mt-4 w-full rounded-2xl border-2 border-gold bg-gold-soft p-4 text-center">
+            <PartyPopper className="mx-auto size-8 text-gold" />
+            <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-accent-foreground">
+              {deskLabel(result.desk).en} · <span className="font-ml normal-case">{deskLabel(result.desk).ml}</span>
+            </p>
+            <p className="mt-1 text-2xl font-extrabold text-primary">{result.name}</p>
+          </div>
+        )}
+
+        {live.phase !== "done" && (
+          <Button
+            variant="gold"
+            size="xl"
+            className={`mt-4 w-full max-w-sm ${canSpin ? "animate-pulse" : ""}`}
+            disabled={!canSpin}
+            onClick={onSpin}
+          >
+            {busy ? <Loader2 className="animate-spin" /> : <Disc3 />}
+            {live.target && lotteryEvents.length === 2 ? `Spin ${spinNo} · ` : ""}Spin the Wheel
+          </Button>
+        )}
+        {live.phase === "open" && !spinToken && (
+          <p className="mt-2 text-xs text-muted-foreground">Sign in as a member to take the spin.</p>
+        )}
+        {live.phase === "open" && !watching && (
+          <p className="mt-2 text-xs text-muted-foreground">The first member to tap spins it for everyone.</p>
+        )}
+      </div>
+
+      <section className="rounded-3xl border bg-card p-4 shadow-card">
+        <h2 className="flex items-center gap-2 font-semibold text-primary">
+          <Crown className="size-4 text-gold" /> Winners · <span className="font-ml text-sm">വിജയികൾ</span>
+        </h2>
+        <ul className="mt-2 space-y-2">
+          {lotteryEvents.map((e) => {
+            const d = live.draws.find((x) => x.event_id === e.id);
+            const showName = e.recipient_member_id && !(animDraw && animDraw.event_id === e.id && !result);
+            return (
+              <li key={e.id} className="flex items-center gap-3 rounded-xl border px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-muted-foreground">
+                    {deskLabel(e.event_no).en} · <span className="font-ml">{deskLabel(e.event_no).ml}</span>
+                  </p>
+                  <p className="font-semibold">
+                    {showName ? memberMap.get(e.recipient_member_id!)?.name : <span className="text-muted-foreground">Waiting for the spin</span>}
+                  </p>
+                  {showName && d && <p className="text-[11px] text-muted-foreground">Spun by {d.spun_by_name}</p>}
+                </div>
+                {showName && <Crown className="size-5 text-gold" />}
+              </li>
+            );
+          })}
+        </ul>
+        {live.phase === "done" && (
+          <Button asChild variant="outline" className="mt-3 w-full">
+            <Link to="/tea">
+              <Send /> Share the WhatsApp invitation
+            </Link>
+          </Button>
+        )}
+      </section>
+
+      <DrawAlertsCard />
+
+      {role === "admin" && live.phase !== "done" && (
+        <div className="flex items-center justify-between rounded-2xl bg-muted p-3">
           <div>
-            <p className="text-xs uppercase tracking-wider text-accent-foreground">
-              {formatMonth(monthKey)} · {deskLabel(e.event_no).en} lottery winner
-            </p>
-            <p className="font-bold text-primary">{memberMap.get(e.recipient_member_id!)?.name}</p>
+            <p className="text-sm font-medium">Admin test: open the wheel now</p>
+            <p className="text-xs text-muted-foreground">Ignores the scheduled draw time.</p>
           </div>
+          <Switch checked={live.month.wheel_override} onCheckedChange={setOverride} />
         </div>
-      ))}
-
-      {lotteryEvents.length === 0 ? (
-        <section className="rounded-3xl border bg-card p-8 text-center shadow-card">
-          <Ban className="mx-auto size-10 text-gold" />
-          <h2 className="mt-3 font-semibold text-primary">No lottery draw for {formatMonth(monthKey)}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {monthEvents.length === 0
-              ? "The Admin hasn't set up this month's Payattu yet."
-              : "This month's recipients are selected on a Priority basis, so the wheel is switched off."}
-          </p>
-        </section>
-      ) : !target ? (
-        <section className="rounded-3xl border bg-card p-8 text-center shadow-card">
-          <PartyPopper className="mx-auto size-10 text-gold" />
-          <p className="mt-3 text-sm text-muted-foreground">Every lottery desk this month already has a winner.</p>
-        </section>
-      ) : (
-        <section className="flex flex-col items-center rounded-3xl bg-emerald-gradient p-5 text-primary-foreground shadow-card">
-          <p className="mb-3 text-sm font-semibold text-gold-soft">
-            Drawing for {deskLabel(target.event_no).en} · <span className="font-ml">{deskLabel(target.event_no).ml}</span>
-            {pending.length > 1 ? ` (then ${deskLabel(pending[1]!.event_no).en})` : ""}
-          </p>
-          <SpinWheel
-            ref={wheelRef}
-            entries={entries}
-            onSpinningChange={setSpinning}
-            onResult={(e) => {
-              setWinner(e);
-              toast.success(`The wheel picked ${e.label}!`);
-            }}
-          />
-          <p className="mt-3 text-sm text-primary-foreground/80">
-            {entries.length} eligible member{entries.length === 1 ? "" : "s"} · verified &amp; not yet received
-          </p>
-
-          {canSpin ? (
-            <Button
-              variant="gold"
-              size="xl"
-              className="mt-4 w-full max-w-xs"
-              disabled={spinning || entries.length === 0}
-              onClick={() => wheelRef.current?.spin()}
-            >
-              {spinning ? "Spinning…" : "Spin the wheel"}
-            </Button>
-          ) : (
-            <div className="mt-4 flex max-w-sm items-start gap-2 rounded-xl bg-ivory/10 p-3 text-sm ring-1 ring-gold/30">
-              <Lock className="mt-0.5 size-4 shrink-0 text-gold-soft" />
-              <span>
-                {win
-                  ? `The wheel opens only from ${formatDate(win.opens)} to ${formatDate(win.closes)} (2–3 days before the Payattu) and only under Admin monitoring.`
-                  : "The Admin needs to schedule this month's Payattu first."}
-              </span>
-            </div>
-          )}
-        </section>
-      )}
-
-      {winner && role === "admin" && target && (
-        <div className="mt-4 rounded-3xl border border-gold bg-card p-5 text-center shadow-gold">
-          <PartyPopper className="mx-auto size-8 text-gold" />
-          <p className="mt-2 text-sm text-muted-foreground">The wheel picked</p>
-          <p className="text-2xl font-bold text-primary">{winner.label}</p>
-          <div className="mt-4 flex justify-center gap-2">
-            <Button variant="outline" onClick={() => setWinner(null)}>
-              Discard
-            </Button>
-            <Button variant="gold" onClick={confirmWinner} disabled={busy}>
-              Confirm for {deskLabel(target.event_no).en}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {role === "admin" && month && lotteryEvents.length > 0 && (
-        <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border bg-card p-4 shadow-card">
-          <div className="flex items-start gap-2">
-            <ShieldCheck className="mt-0.5 size-5 text-primary" />
-            <div>
-              <p className="text-sm font-semibold">Admin test override</p>
-              <p className="text-xs text-muted-foreground">Unlock the wheel on any day for testing.</p>
-            </div>
-          </div>
-          <Switch checked={override} onCheckedChange={toggleOverride} />
-        </div>
-      )}
-
-      {target && (
-        <section className="mt-5 rounded-3xl border bg-card p-4 shadow-card">
-          <h2 className="mb-2 text-sm font-semibold text-primary">On the wheel</h2>
-          {entries.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No eligible members yet. Members join the wheel once they have a verified payment.
-            </p>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {entries.map((e) => (
-                <span key={e.id} className="rounded-full border bg-background px-2.5 py-1 text-xs">
-                  {e.label}
-                </span>
-              ))}
-            </div>
-          )}
-        </section>
       )}
     </div>
   );

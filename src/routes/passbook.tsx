@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { BookOpen, Crown, Loader2, LogOut, Settings } from "lucide-react";
 import { PageTitle } from "@/components/AppShell";
 import { MemberSelect } from "@/components/MemberSelect";
+import { DrawAlertsCard } from "@/components/live/DrawAlertsToggle";
 import { MemberLoginForm } from "@/components/MemberLoginForm";
 import { EventHistory, SelectionBadge } from "@/components/EventCards";
 import { PriorityRequestCard } from "@/components/PriorityRequestCard";
@@ -48,7 +49,7 @@ function PassbookPage() {
 
   if (!ready) return null;
 
-  const viewingId = member ? member.memberId : role !== "member" ? staffPick : null;
+  const viewingId = member ? member.memberId : role === "admin" ? staffPick : null;
   const viewing = viewingId ? memberMap.get(viewingId) : undefined;
 
   return (
@@ -76,7 +77,7 @@ function PassbookPage() {
         )}
       </PageTitle>
 
-      {!member && role === "member" && (
+      {!member && role !== "admin" && (
         <div className="rounded-3xl border bg-card p-5 shadow-card">
           <h2 className="font-semibold text-primary">Member sign in</h2>
           <p className="mb-4 text-sm text-muted-foreground">
@@ -86,12 +87,14 @@ function PassbookPage() {
         </div>
       )}
 
-      {!member && role !== "member" && (
+      {!member && role === "admin" && (
         <div className="rounded-2xl border bg-card p-3 shadow-card">
           <p className="mb-2 text-xs text-muted-foreground">Staff view · pick a member to see their published passbook</p>
           <MemberSelect members={members} value={staffPick} onChange={setStaffPick} placeholder="Choose a member" />
         </div>
       )}
+
+      {member && <DrawAlertsCard />}
 
       {viewing && (
         <MemberPassbook member={viewing} mine={member ? (dash.data ?? null) : null} loadingMine={!!member && dash.isLoading} />

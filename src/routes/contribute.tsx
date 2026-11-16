@@ -43,7 +43,7 @@ function ContributePage() {
   const { role, token, member, logoutMember, ready } = useRole();
   const submit = useServerFn(submitContribution);
   const qc = useQueryClient();
-  const staff = role !== "member";
+  const staff = role === "admin";
   const mine = useQuery({ ...myDashboardQuery(member?.token ?? null), enabled: !staff && !!member && !member.mustChange });
 
   const monthOptions = useMemo(() => {
@@ -169,7 +169,7 @@ function ContributePage() {
         <h1 className="mt-4 text-xl font-bold text-primary">Submitted — thank you!</h1>
         <p className="font-ml mt-1 text-sm text-accent-foreground">നന്ദി! നിങ്ങളുടെ അടവ് ലഭിച്ചു</p>
         <p className="mt-3 text-sm text-muted-foreground">
-          {formatINR(done.amount)} to {done.recipient}. The Conductors will verify it, and it counts once the Admin
+          {formatINR(done.amount)} to {done.recipient}. The desk's Conductor will verify it, and it counts once the Admin
           publishes this month's ledger.
         </p>
         <Button className="mt-6" variant="outline" onClick={() => setDone(null)}>

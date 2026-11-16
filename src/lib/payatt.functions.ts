@@ -12,7 +12,6 @@ import {
   verifyToken,
 } from "./session.server";
 import {
-  canSpinWheel,
   conductorDeskEvents,
   cycleMonthNumber,
   slotProblem,
@@ -751,38 +750,6 @@ export const saveContributionSheet = createServerFn({ method: "POST" })
     return { ok: true, saved, removed };
   });
 
-export const confirmLotteryWinner = createServerFn({ method: "POST" })
-  .inputValidator((d) =>
-    z.object({ token: tokenSchema, event_id: z.string().uuid(), member_id: z.string().uuid() }).parse(d),
-  )
-  .handler(async ({ data }) => {
-    await requireRole(data.token, ["admin"]);
-    const sb = await admin();
-    const { data: ev } = await sb.from("payatt_events").select("*").eq("id", data.event_id).maybeSingle();
-    if (!ev) throw new Error("This Payattu no longer exists");
-    if (ev.selection_type !== "lottery") throw new Error("This Payattu is a Priority selection — no draw needed");
-    if (ev.recipient_member_id) throw new Error("This lottery already has a winner");
-    const { data: m } = await sb.from("payatt_months").select("*").eq("month", ev.month).maybeSingle();
-    if (!m) throw new Error("Set up this month's Payatt first");
-    if (!canSpinWheel({ role: "admin", today: todayIST(), payattDate: m.payatt_date, override: m.wheel_override }))
-      throw new Error("The wheel is locked. It opens only on the day before the Payatt date.");
-    const [members, verified, siblings] = await Promise.all([
-      sb.from("members").select("id, has_conducted").is("removed_at", null),
-      sb.from("contributions").select("member_id, month, amount, status").eq("status", "verified"),
-      sb.from("payatt_events").select("recipient_member_id").eq("month", ev.month),
-    ]);
-    const eligible = wheelCandidates(
-      members.data ?? [],
-      verified.data ?? [],
-      (siblings.data ?? []).map((s) => s.recipient_member_id),
-    );
-    if (!eligible.some((e) => e.id === data.member_id)) throw new Error("This member is not eligible for the draw");
-    const upd = await sb.from("payatt_events").update({ recipient_member_id: data.member_id }).eq("id", ev.id);
-    fail(upd.error);
-    await syncConducted(sb, ev.month, [], [data.member_id]);
-    return { ok: true };
-  });
-
 export const updateMember = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z
@@ -1178,6 +1145,7 @@ export const addMember = createServerFn({ method: "POST" })
       .single();
     if (ins.error?.code === "23505") throw new Error(`Slot ${data.slot_no} is already taken`);
     fail(ins.error);
+    if (!ins.data) throw new Error("Could not add the member");
     const { hash, salt } = await hashPassword(data.temp_password);
     const acc = await sb.from("member_accounts").insert({
       member_id: ins.data.id,

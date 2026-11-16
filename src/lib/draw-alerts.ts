@@ -65,7 +65,7 @@ export function useDrawAlerts(viewerToken: string | null) {
     await savePushSubscription({
       data: {
         token: viewerToken,
-        subscription: { endpoint: sub.endpoint, keys: { p256dh: json.keys?.p256dh ?? "", auth: json.keys?.auth ?? "" } },
+        subscription: { endpoint: sub.endpoint, keys: { p256dh: json.keys?.["p256dh"] ?? "", auth: json.keys?.["auth"] ?? "" } },
       },
     });
     await qc.invalidateQueries({ queryKey: STATUS_KEY });
