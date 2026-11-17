@@ -21,38 +21,38 @@ Full brief (Nov 9):
 - [x] Payment method Cash / UPI on contributions; "Verify & Publish Ledger" wording
 - [x] Passbook shows date per entry; password change in Profile Settings
 - [ ] Offline-ready app (published site only) — waiting on user: needs confirmation, adds a background cache
-- [ ] End-to-end check in the preview
+- [x] End-to-end check in the preview
 
 Live Lucky Wheel (Nov 11):
 
-- [ ] Admin sets a draw date & time per month; homepage countdown "അടുത്ത നറുക്കെടുപ്പ് സമയം"
-- [ ] 1-minute alert popup + chime for signed-in members, "Join Live Draw Now"
-- [ ] Live Wheel Arena: spin unlocks at draw time; first member to spin locks it for everyone; synced spin on all screens; winner saved to the desk and shown on home
-- [ ] Two lottery desks: Spin 1 for Desk 1, winner removed, then Spin 2 for Desk 2
+- [x] Admin sets a draw date & time per month; homepage countdown "അടുത്ത നറുക്കെടുപ്പ് സമയം"
+- [x] 1-minute alert popup + chime for signed-in members, "Join Live Draw Now"
+- [x] Live Wheel Arena: spin unlocks at draw time; first member to spin locks it for everyone; synced spin on all screens; winner saved to the desk and shown on home
+- [x] Two lottery desks: Spin 1 for Desk 1, winner removed, then Spin 2 for Desk 2
 
 Migration into this project (Nov 12):
 
 - [x] App, pages, rules and data structure moved; 36 members and November month seeded
 - [x] Member sign-in, forced password change and contribution with receipt checked end to end
 - [x] Import existing records (members, months, desks, payments, tea party, member usernames)
-- [ ] Admin/Conductor PIN sign-in check — waiting on user (PINs unchanged from the old app)
+- [ ] Admin PIN sign-in check — waiting on user (PIN unchanged from the old app; Conductor PIN retired)
 
 Live draw alerts + Conductor Desk (Nov 13):
 
-- [ ] Draw alerts toggle (profile + top bar): phone notification 60 s before draw, tap opens Live Wheel
-- [ ] Background alert sender runs every minute and notifies subscribed members
-- [ ] Foreground popup with bell chime + pulsing "Join Live Draw Now"
-- [ ] Spin 2 unlocks 15 s after Spin 1; winners on home board + WhatsApp invite
-- [ ] Remove Conductor PIN login; members who are this month's Desk 1/2 recipient get a "Conductor Desk" tab
-- [ ] Conductor sees/enters/verifies only their own desk; Admin keeps both
-- [ ] One-click Verify + Add Contribution (min ₹2,500) inside the conductor's desk
+- [x] Draw alerts toggle (profile + top bar): phone notification 60 s before draw, tap opens Live Wheel
+- [x] Background alert sender runs every minute and notifies subscribed members
+- [x] Foreground popup with bell chime + pulsing "Join Live Draw Now"
+- [x] Spin 2 unlocks 15 s after Spin 1; winners on home board + WhatsApp invite
+- [x] Remove Conductor PIN login; members who are this month's Desk 1/2 recipient get a "Conductor Desk" tab
+- [x] Conductor sees/enters/verifies only their own desk; Admin keeps both
+- [x] One-click Verify + Add Contribution (min ₹2,500) inside the conductor's desk
 
 Member roster + sign-in gate (Nov 13):
 
-- [ ] Admin Desk: remove a member from a slot (1–36)
-- [ ] Admin Desk: "Add New Member" into a chosen slot with name, department, phone, username, temporary password
-- [ ] Slot order reflected in member lists, passbooks and wheel
-- [ ] Signed-out home is a welcome page about സൗഹൃദ പണപ്പയറ്റ് with a "Sign In (ലോഗിൻ ചെയ്യുക)" button; all pool, desk, tea, draw, directory and passbook info only after sign-in
+- [x] Admin Desk: remove a member from a slot (1–36)
+- [x] Admin Desk: "Add New Member" into a chosen slot with name, department, phone, username, temporary password
+- [x] Slot order reflected in member lists, passbooks and wheel
+- [x] Signed-out home is a welcome page about സൗഹൃദ പണപ്പയറ്റ് with a "Sign In (ലോഗിൻ ചെയ്യുക)" button; all pool, desk, tea, draw, directory and passbook info only after sign-in
 
 App name + messages (Nov 13):
 
@@ -67,6 +67,6 @@ Recipient cards (Nov 14):
 
 Cycles + defaults (Nov 14):
 
-- [ ] Unlimited months: "+ Add New Month / Cycle" in Cycles and month picker, Month N counter
-- [ ] Default time "03:45 PM (ക്ലാസ്സ് സമയത്തിന് ശേഷം)"
-- [ ] Default venue "സർ സയ്യിദ് കോളേജ് കഫറ്റീരിയ (Sir Syed College Cafeteria)"
+- [x] Unlimited months: "+ Add New Month / Cycle" in Cycles and month picker, Month N counter
+- [x] Default time "03:45 PM (ക്ലാസ്സ് സമയത്തിന് ശേഷം)"
+- [x] Default venue "സർ സയ്യിദ് കോളേജ് കഫറ്റീരിയ (Sir Syed College Cafeteria)"

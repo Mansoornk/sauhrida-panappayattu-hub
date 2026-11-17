@@ -15,6 +15,13 @@
       "when": 1794622973090,
       "tag": "0001_roster_slots_push_alerts_signed_in_only",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794875062144,
+      "tag": "0002_new_schedule_defaults",
+      "breakpoints": true
     }
   ]
 }

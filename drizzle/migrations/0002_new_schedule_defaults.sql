@@ -1,0 +1,2 @@
+ALTER TABLE public.payatt_months ALTER COLUMN venue SET DEFAULT 'സർ സയ്യിദ് കോളേജ് കഫറ്റീരിയ (Sir Syed College Cafeteria)';
+ALTER TABLE public.payatt_months ALTER COLUMN event_time SET DEFAULT '03:45 PM (ക്ലാസ്സ് സമയത്തിന് ശേഷം)';
