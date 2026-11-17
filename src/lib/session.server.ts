@@ -29,9 +29,27 @@ async function hmacKey(): Promise<CryptoKey> {
   ]);
 }
 
-export async function signToken(role: StaffRole): Promise<{ token: string; exp: number }> {
+/**
+ * Binds an Admin token to the PIN it was issued under: an HMAC of the stored PIN hash
+ * (keyed with the session secret, so the token reveals nothing about the PIN).
+ * Changing the PIN changes this value, which revokes every earlier Admin session.
+ */
+async function pinFingerprint(pinHash: string): Promise<string> {
+  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", await hmacKey(), enc.encode(`pin:${pinHash}`)));
+  return b64url(sig).slice(0, 22);
+}
+
+async function currentPinHash(role: StaffRole): Promise<string | null> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data, error } = await supabaseAdmin.from("role_pins").select("pin_hash").eq("role", role).maybeSingle();
+  if (error) throw new Error("Could not check the desk session");
+  return data?.pin_hash ?? null;
+}
+
+export async function signToken(role: StaffRole, pinHash: string): Promise<{ token: string; exp: number }> {
   const exp = Date.now() + TOKEN_TTL_MS;
-  const payload = b64url(enc.encode(JSON.stringify({ role, exp })));
+  const pv = await pinFingerprint(pinHash);
+  const payload = b64url(enc.encode(JSON.stringify({ role, exp, pv })));
   const sig = new Uint8Array(await crypto.subtle.sign("HMAC", await hmacKey(), enc.encode(payload)));
   return { token: `${payload}.${b64url(sig)}`, exp };
 }
@@ -47,17 +65,18 @@ export async function verifyToken(token: string | undefined | null): Promise<Sta
     enc.encode(payload),
   );
   if (!ok) return null;
+  let data: { role: StaffRole; exp: number; pv?: string };
   try {
-    const data = JSON.parse(new TextDecoder().decode(fromB64url(payload))) as {
-      role: StaffRole;
-      exp: number;
-    };
-    if (data.exp < Date.now()) return null;
-    if (data.role !== "admin") return null;
-    return data.role;
+    data = JSON.parse(new TextDecoder().decode(fromB64url(payload))) as typeof data;
   } catch {
     return null;
   }
+  if (typeof data.exp !== "number" || data.exp < Date.now()) return null;
+  if (data.role !== "admin" || typeof data.pv !== "string") return null;
+  // Reject sessions issued under an earlier PIN.
+  const pinHash = await currentPinHash(data.role);
+  if (!pinHash || (await pinFingerprint(pinHash)) !== data.pv) return null;
+  return data.role;
 }
 
 /* ---------------- Member passwords & sessions ---------------- */

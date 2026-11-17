@@ -817,13 +817,15 @@ function ExportsPanel({ month }: { month: string }) {
 /* ---------------- Admin PIN ---------------- */
 
 function PinsPanel() {
-  const { token } = useRole();
+  const { token, setSession } = useRole();
   const change = useServerFn(changePin);
   const [pin, setPin] = useState("");
   async function submit() {
     if (!token) return;
     try {
-      await change({ data: { token, role: "admin", pin } });
+      const res = await change({ data: { token, role: "admin", pin } });
+      // The PIN change signs out every other Admin session; keep this one signed in.
+      setSession({ role: "admin", token: res.token, exp: res.exp });
       toast.success("Admin PIN changed");
       setPin("");
     } catch (e) {

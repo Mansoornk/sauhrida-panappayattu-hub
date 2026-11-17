@@ -33,6 +33,8 @@ import {
 const monthKey = z.string().regex(/^\d{4}-\d{2}-01$/, "Invalid month");
 const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date");
 const tokenSchema = z.string().min(10).max(2000);
+/** Receipt links are short-lived so access ends soon after a desk is reassigned. */
+const SCREENSHOT_URL_TTL_S = 120;
 
 async function admin() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -103,7 +105,7 @@ export const loginStaff = createServerFn({ method: "POST" })
       await new Promise((r) => setTimeout(r, 600));
       return { ok: false as const, error: "Incorrect PIN" };
     }
-    const { token, exp } = await signToken(data.role);
+    const { token, exp } = await signToken(data.role, row.pin_hash);
     return { ok: true as const, token, exp, role: data.role };
   });
 
@@ -423,7 +425,7 @@ export const getDeskData = createServerFn({ method: "POST" })
       (monthRows.data ?? []).map(async (r) => {
         let screenshot_url: string | null = null;
         if (r.screenshot_path) {
-          const s = await sb.storage.from("payment-screenshots").createSignedUrl(r.screenshot_path, 3600);
+          const s = await sb.storage.from("payment-screenshots").createSignedUrl(r.screenshot_path, SCREENSHOT_URL_TTL_S);
           screenshot_url = s.data?.signedUrl ?? null;
         }
         return { ...r, screenshot_url };
@@ -446,16 +448,18 @@ export const reviewContribution = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const sb = await admin();
     const isAdmin = data.token ? (await requireRole(data.token, ["admin"])) === "admin" : false;
+    // Authenticate before touching the record so callers can't probe which entries exist.
+    const acc = isAdmin ? null : await requireMember(sb, data.member_token);
+    const mine = acc ? await myConductorEvents(sb, acc.member_id) : [];
     const { data: existing } = await sb
       .from("contributions")
       .select("published, event_id")
       .eq("id", data.id)
       .maybeSingle();
+    if (!isAdmin && (!existing || !mine.some((e) => e.id === existing.event_id)))
+      throw new Error("This entry belongs to another Payattu Desk");
     if (!existing) throw new Error("This entry no longer exists");
     if (!isAdmin) {
-      const acc = await requireMember(sb, data.member_token);
-      const mine = await myConductorEvents(sb, acc.member_id);
-      if (!mine.some((e) => e.id === existing.event_id)) throw new Error("This entry belongs to another Payattu Desk");
       if (data.action === "delete") throw new Error("Only the Admin can delete entries");
       if (existing.published) throw new Error("This entry is already published. Only the Admin can change it.");
     }
@@ -500,7 +504,7 @@ export const getConductorDesk = createServerFn({ method: "POST" })
       (rows ?? []).map(async ({ screenshot_path, ...r }) => {
         let screenshot_url: string | null = null;
         if (screenshot_path) {
-          const s = await sb.storage.from("payment-screenshots").createSignedUrl(screenshot_path, 3600);
+          const s = await sb.storage.from("payment-screenshots").createSignedUrl(screenshot_path, SCREENSHOT_URL_TTL_S);
           screenshot_url = s.data?.signedUrl ?? null;
         }
         return { ...r, screenshot_url };
@@ -845,12 +849,15 @@ export const changePin = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requireRole(data.token, ["admin"]);
     const sb = await admin();
+    const pinHash = await hashPin(data.role, data.pin);
     const { error } = await sb
       .from("role_pins")
-      .update({ pin_hash: await hashPin(data.role, data.pin), updated_at: new Date().toISOString() })
+      .update({ pin_hash: pinHash, updated_at: new Date().toISOString() })
       .eq("role", data.role);
     fail(error);
-    return { ok: true };
+    // Every earlier Admin session is now revoked; hand this device a fresh one.
+    const { token, exp } = await signToken(data.role, pinHash);
+    return { ok: true, token, exp, role: data.role };
   });
 
 
@@ -1208,15 +1215,36 @@ export const savePushSubscription = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const sb = await admin();
     const viewer = await requireViewer(sb, data.token);
-    const { error } = await sb.from("push_subscriptions").upsert(
-      {
-        endpoint: data.subscription.endpoint,
-        p256dh: data.subscription.keys.p256dh,
-        auth: data.subscription.keys.auth,
-        member_id: viewer.memberId,
-      },
-      { onConflict: "endpoint" },
-    );
+    const { data: existing, error: findError } = await sb
+      .from("push_subscriptions")
+      .select("id, member_id, p256dh, auth")
+      .eq("endpoint", data.subscription.endpoint)
+      .maybeSingle();
+    fail(findError);
+    if (existing) {
+      // Only the same browser (which holds the same keys) may move an existing subscription to
+      // another signer-in, e.g. a shared phone. Anyone else can't overwrite it.
+      const sameOwner = existing.member_id === viewer.memberId;
+      const sameDevice =
+        existing.p256dh === data.subscription.keys.p256dh && existing.auth === data.subscription.keys.auth;
+      if (!sameOwner && !sameDevice) throw new Error("This alert subscription belongs to another device");
+      const { error } = await sb
+        .from("push_subscriptions")
+        .update({
+          p256dh: data.subscription.keys.p256dh,
+          auth: data.subscription.keys.auth,
+          member_id: viewer.memberId,
+        })
+        .eq("id", existing.id);
+      fail(error);
+      return { ok: true };
+    }
+    const { error } = await sb.from("push_subscriptions").insert({
+      endpoint: data.subscription.endpoint,
+      p256dh: data.subscription.keys.p256dh,
+      auth: data.subscription.keys.auth,
+      member_id: viewer.memberId,
+    });
     fail(error);
     return { ok: true };
   });
@@ -1225,8 +1253,10 @@ export const deletePushSubscription = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ token: tokenSchema, endpoint: z.string().url().max(1000) }).parse(d))
   .handler(async ({ data }) => {
     const sb = await admin();
-    await requireViewer(sb, data.token);
-    const { error } = await sb.from("push_subscriptions").delete().eq("endpoint", data.endpoint);
+    const viewer = await requireViewer(sb, data.token);
+    // Only remove the signed-in person's own subscription.
+    const base = sb.from("push_subscriptions").delete().eq("endpoint", data.endpoint);
+    const { error } = await (viewer.memberId ? base.eq("member_id", viewer.memberId) : base.is("member_id", null));
     fail(error);
     return { ok: true };
   });
